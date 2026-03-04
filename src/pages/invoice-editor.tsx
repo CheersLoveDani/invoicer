@@ -5,8 +5,11 @@ import { pdf } from '@react-pdf/renderer'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { useInvoiceForm } from '@/hooks/use-invoice-form'
+import { invoiceService } from '@/db'
+import { generateMailtoLink } from '@/lib/email-utils'
 import { InvoiceForm } from '@/components/invoice/invoice-form'
 import { InvoiceActions } from '@/components/invoice/invoice-actions'
+import { PdfDragCard } from '@/components/invoice/pdf-drag-card'
 import { PdfPreview } from '@/components/pdf/pdf-preview'
 import { InvoicePdfDocument } from '@/components/pdf/pdf-document'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -18,6 +21,8 @@ export default function InvoiceEditorPage() {
   const { form, save, isLoading, mode } = invoiceForm
 
   const [showPreview, setShowPreview] = useState(false)
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null)
+  const [pdfFilename, setPdfFilename] = useState('')
 
   const isNew = mode !== 'edit'
 
@@ -50,6 +55,59 @@ export default function InvoiceEditorPage() {
       toast.error('Failed to generate PDF')
     }
   }, [form])
+
+  const handleSendInvoice = useCallback(async () => {
+    try {
+      // 1. Save the invoice (ensures it exists in DB and we get an ID)
+      const savedId = await save()
+
+      // 2. Generate the PDF blob
+      const blob = await pdf(
+        <InvoicePdfDocument
+          template={form.pdfTemplate}
+          title={form.title}
+          invoiceNumber={form.invoiceNumber}
+          date={form.date}
+          from={form.from}
+          to={{ name: form.to.name, email: form.to.email, address: form.to.address }}
+          lineItems={form.lineItems}
+          expenses={form.expenses}
+          notes={form.notes}
+          paymentDetails={form.paymentDetails}
+          currency={form.currency}
+        />,
+      ).toBlob()
+
+      // 3. Store the blob for the drag card
+      const filename = `Invoice-${form.invoiceNumber || 'draft'}-${format(form.date, 'yyyy-MM-dd')}.pdf`
+      setPdfBlob(blob)
+      setPdfFilename(filename)
+
+      // 4. Mark the invoice as sent
+      await invoiceService.markSent(savedId)
+
+      // 5. Generate and open the mailto link
+      const mailtoLink = generateMailtoLink(
+        {
+          invoiceNumber: form.invoiceNumber,
+          title: form.title,
+          to: { name: form.to.name, email: form.to.email },
+          lineItems: form.lineItems,
+          expenses: form.expenses,
+          currency: form.currency,
+          notes: form.notes,
+        },
+        form.from.name,
+      )
+      window.location.href = mailtoLink
+
+      // 6. Show toast
+      toast.success('Invoice marked as sent. Drag the PDF to attach it to your email.')
+    } catch (err) {
+      console.error('Failed to send invoice:', err)
+      toast.error('Failed to send invoice')
+    }
+  }, [form, save])
 
   if (isLoading) {
     return (
@@ -123,11 +181,14 @@ export default function InvoiceEditorPage() {
         </div>
       </div>
 
+      {/* Draggable PDF card — shown after sending */}
+      <PdfDragCard pdfBlob={pdfBlob} filename={pdfFilename} />
+
       {/* Actions bar */}
       <InvoiceActions
         onSaveDraft={() => save()}
         onDownloadPdf={handleDownloadPdf}
-        onSendInvoice={() => {}}
+        onSendInvoice={handleSendInvoice}
         isNew={isNew}
         form={form}
       />

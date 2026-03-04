@@ -14,17 +14,11 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 
 interface InvoiceActionsProps {
   onSaveDraft: () => void
   onDownloadPdf: () => void | Promise<void>
-  onSendInvoice: () => void
+  onSendInvoice: () => Promise<void>
   isNew: boolean
   form: InvoiceFormState
 }
@@ -40,6 +34,7 @@ export function InvoiceActions({
   const [templateName, setTemplateName] = useState('')
   const [isSavingTemplate, setIsSavingTemplate] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
+  const [isSending, setIsSending] = useState(false)
 
   async function handleDownloadPdf() {
     setIsDownloading(true)
@@ -100,21 +95,25 @@ export function InvoiceActions({
             {isDownloading ? 'Generating...' : 'Download PDF'}
           </Button>
 
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <Button variant="outline" disabled onClick={onSendInvoice}>
-                    <Send className="size-4" />
-                    Send Invoice
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Available after email integration is built</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button
+            variant="outline"
+            disabled={isSending}
+            onClick={async () => {
+              setIsSending(true)
+              try {
+                await onSendInvoice()
+              } finally {
+                setIsSending(false)
+              }
+            }}
+          >
+            {isSending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Send className="size-4" />
+            )}
+            {isSending ? 'Sending...' : 'Send Invoice'}
+          </Button>
 
           <Button
             variant="secondary"
