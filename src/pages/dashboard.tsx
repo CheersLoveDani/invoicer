@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { StatsCards } from '@/components/dashboard/stats-cards'
 import { NotificationPanel } from '@/components/dashboard/notification-panel'
 import { RecentActivity } from '@/components/dashboard/recent-activity'
+import { CalendarView } from '@/components/dashboard/calendar-view'
 import { useNotifications } from '@/hooks/use-notifications'
 
 export default function DashboardPage() {
@@ -55,11 +56,7 @@ export default function DashboardPage() {
           </div>
         </TabsContent>
         <TabsContent value="calendar" className="mt-4">
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-center">
-            <p className="text-sm text-muted-foreground">
-              Calendar view coming soon.
-            </p>
-          </div>
+          <CalendarView />
         </TabsContent>
       </Tabs>
     </div>
