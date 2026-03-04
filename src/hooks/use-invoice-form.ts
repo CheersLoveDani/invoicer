@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
-import { addDays } from 'date-fns'
+import { addDays, addWeeks, addMonths } from 'date-fns'
 import { toast } from 'sonner'
 import {
   profileService,
@@ -9,6 +9,7 @@ import {
   invoiceService,
   templateService,
   settingsService,
+  scheduleService,
 } from '@/db'
 import type {
   Client,
@@ -66,6 +67,52 @@ const emptyPayment: InvoicePaymentDetails = {
   bankSortCode: '',
   bankName: '',
   reference: '',
+}
+
+/**
+ * After saving an invoice created from a schedule (template+client combo),
+ * advance the schedule's nextDueDate based on its frequency.
+ */
+async function advanceMatchingSchedule(
+  templateId: string | undefined,
+  clientId: string | undefined,
+): Promise<void> {
+  if (!templateId || !clientId) return
+  try {
+    const allSchedules = await scheduleService.getAll()
+    const match = allSchedules.find(
+      (s) =>
+        s.active &&
+        s.templateId === templateId &&
+        s.clientId === clientId,
+    )
+    if (!match) return
+
+    const currentDue = new Date(match.nextDueDate)
+    let nextDue: Date
+
+    switch (match.frequency) {
+      case 'weekly':
+        nextDue = addWeeks(currentDue, 1)
+        break
+      case 'monthly':
+        nextDue = addMonths(currentDue, 1)
+        break
+      case 'custom':
+        nextDue = addDays(currentDue, match.customIntervalDays ?? 14)
+        break
+      default:
+        nextDue = addMonths(currentDue, 1)
+    }
+
+    await scheduleService.update(match.id, {
+      lastGeneratedDate: new Date(),
+      nextDueDate: nextDue,
+    })
+  } catch {
+    // Silently ignore schedule advancement errors —
+    // the invoice was already saved successfully
+  }
 }
 
 function createBlankForm(): InvoiceFormState {
@@ -402,10 +449,14 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
       setExistingId(newId)
       setIsDirty(false)
       toast.success('Invoice created')
+
+      // Advance any matching schedule after creating an invoice from a template
+      await advanceMatchingSchedule(form.templateId, selectedClient?.id)
+
       navigate(`/invoices/${newId}`, { replace: true })
       return newId
     }
-  }, [form, mode, existingId, navigate])
+  }, [form, mode, existingId, navigate, selectedClient])
 
   return {
     form,
