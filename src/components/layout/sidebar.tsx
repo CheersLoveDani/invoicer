@@ -63,7 +63,7 @@ const secondaryNavItems: NavItem[] = [
   },
 ]
 
-function SidebarNavItem({ item }: { item: NavItem }) {
+function SidebarNavItem({ item, onClick }: { item: NavItem; onClick?: () => void }) {
   const location = useLocation()
   // For "Invoices", we want it active on /invoices but NOT on /invoices/new or /invoices/:id
   // NavLink end prop handles this
@@ -78,6 +78,7 @@ function SidebarNavItem({ item }: { item: NavItem }) {
           <NavLink
             to={item.href}
             end={item.end}
+            onClick={onClick}
             className={cn(
               'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
               isActive
@@ -112,9 +113,9 @@ function SidebarNavItem({ item }: { item: NavItem }) {
   )
 }
 
-export function Sidebar() {
+export function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   return (
-    <aside className="flex h-screen w-60 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
+    <>
       {/* Logo / App Name */}
       <div className="flex h-14 items-center gap-2.5 px-5">
         <div className="flex size-8 items-center justify-center rounded-lg bg-primary shadow-sm">
@@ -134,7 +135,7 @@ export function Sidebar() {
       <ScrollArea className="flex-1 px-3 py-4">
         <nav className="flex flex-col gap-1">
           {mainNavItems.map((item) => (
-            <SidebarNavItem key={item.href} item={item} />
+            <SidebarNavItem key={item.href} item={item} onClick={onNavClick} />
           ))}
         </nav>
 
@@ -142,7 +143,7 @@ export function Sidebar() {
 
         <nav className="flex flex-col gap-1">
           {secondaryNavItems.map((item) => (
-            <SidebarNavItem key={item.href} item={item} />
+            <SidebarNavItem key={item.href} item={item} onClick={onNavClick} />
           ))}
         </nav>
       </ScrollArea>
@@ -154,6 +155,14 @@ export function Sidebar() {
           v0.1.0
         </p>
       </div>
+    </>
+  )
+}
+
+export function Sidebar() {
+  return (
+    <aside className="hidden md:flex h-screen w-60 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
+      <SidebarContent />
     </aside>
   )
 }

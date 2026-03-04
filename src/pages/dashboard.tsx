@@ -56,7 +56,7 @@ export default function DashboardPage() {
             {/* Analytics */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Earnings Overview</h3>
-              <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
+              <div className="grid gap-4 grid-cols-1 lg:grid-cols-[3fr_2fr]">
                 <EarningsChart />
                 <ClientBreakdownChart />
               </div>

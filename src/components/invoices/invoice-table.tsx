@@ -175,138 +175,140 @@ export function InvoiceTable({ invoices, onSelectionChange }: InvoiceTableProps)
 
   return (
     <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[40px]">
-              <Checkbox
-                checked={allSelected ? true : someSelected ? 'indeterminate' : false}
-                onCheckedChange={toggleSelectAll}
-                aria-label="Select all invoices"
-              />
-            </TableHead>
-            <TableHead>
-              <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('invoiceNumber')}>
-                Invoice # <SortIcon field="invoiceNumber" />
-              </Button>
-            </TableHead>
-            <TableHead>
-              <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('clientName')}>
-                Client <SortIcon field="clientName" />
-              </Button>
-            </TableHead>
-            <TableHead>
-              <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('date')}>
-                Date <SortIcon field="date" />
-              </Button>
-            </TableHead>
-            <TableHead>
-              <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('dueDate')}>
-                Due Date <SortIcon field="dueDate" />
-              </Button>
-            </TableHead>
-            <TableHead>
-              <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('amount')}>
-                Amount <SortIcon field="amount" />
-              </Button>
-            </TableHead>
-            <TableHead>
-              <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('status')}>
-                Status <SortIcon field="status" />
-              </Button>
-            </TableHead>
-            <TableHead className="w-[50px]" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedInvoices.length === 0 ? (
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                No invoices found.
-              </TableCell>
+              <TableHead className="w-[40px]">
+                <Checkbox
+                  checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                  onCheckedChange={toggleSelectAll}
+                  aria-label="Select all invoices"
+                />
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('invoiceNumber')}>
+                  Invoice # <SortIcon field="invoiceNumber" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('clientName')}>
+                  Client <SortIcon field="clientName" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('date')}>
+                  Date <SortIcon field="date" />
+                </Button>
+              </TableHead>
+              <TableHead className="hidden lg:table-cell">
+                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('dueDate')}>
+                  Due Date <SortIcon field="dueDate" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('amount')}>
+                  Amount <SortIcon field="amount" />
+                </Button>
+              </TableHead>
+              <TableHead className="hidden sm:table-cell">
+                <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('status')}>
+                  Status <SortIcon field="status" />
+                </Button>
+              </TableHead>
+              <TableHead className="w-[50px]" />
             </TableRow>
-          ) : (
-            sortedInvoices.map((invoice) => {
-              const isOverdue = invoice.status === 'sent' && new Date(invoice.dueDate) < now
-              const total = getInvoiceTotal(invoice)
-              return (
-                <TableRow
-                  key={invoice.id}
-                  data-state={selectedIds.has(invoice.id) ? 'selected' : undefined}
-                >
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedIds.has(invoice.id)}
-                      onCheckedChange={() => toggleSelect(invoice.id)}
-                      aria-label={`Select invoice ${invoice.invoiceNumber}`}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Link
-                      to={`/invoices/${invoice.id}`}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {invoice.invoiceNumber}
-                    </Link>
-                  </TableCell>
-                  <TableCell>{invoice.to.name}</TableCell>
-                  <TableCell>{format(new Date(invoice.date), 'dd/MM/yyyy')}</TableCell>
-                  <TableCell className={isOverdue ? 'text-destructive font-medium' : ''}>
-                    {format(new Date(invoice.dueDate), 'dd/MM/yyyy')}
-                  </TableCell>
-                  <TableCell className="font-mono">
-                    {formatAmount(total, invoice.currency)}
-                  </TableCell>
-                  <TableCell>
-                    <InvoiceStatusBadge status={invoice.status} dueDate={invoice.dueDate} />
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-xs">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => navigate(`/invoices/${invoice.id}`)}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          View / Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => navigate(`/invoices/new?duplicate=${invoice.id}`)}>
-                          <Copy className="mr-2 h-4 w-4" />
-                          Duplicate
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {invoice.status !== 'paid' && (
-                          <DropdownMenuItem onClick={() => handleMarkPaid(invoice.id)}>
-                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                            Mark Paid
+          </TableHeader>
+          <TableBody>
+            {sortedInvoices.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                  No invoices found.
+                </TableCell>
+              </TableRow>
+            ) : (
+              sortedInvoices.map((invoice) => {
+                const isOverdue = invoice.status === 'sent' && new Date(invoice.dueDate) < now
+                const total = getInvoiceTotal(invoice)
+                return (
+                  <TableRow
+                    key={invoice.id}
+                    data-state={selectedIds.has(invoice.id) ? 'selected' : undefined}
+                  >
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(invoice.id)}
+                        onCheckedChange={() => toggleSelect(invoice.id)}
+                        aria-label={`Select invoice ${invoice.invoiceNumber}`}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        to={`/invoices/${invoice.id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {invoice.invoiceNumber}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{invoice.to.name}</TableCell>
+                    <TableCell>{format(new Date(invoice.date), 'dd/MM/yyyy')}</TableCell>
+                    <TableCell className={`hidden lg:table-cell ${isOverdue ? 'text-destructive font-medium' : ''}`}>
+                      {format(new Date(invoice.dueDate), 'dd/MM/yyyy')}
+                    </TableCell>
+                    <TableCell className="font-mono">
+                      {formatAmount(total, invoice.currency)}
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      <InvoiceStatusBadge status={invoice.status} dueDate={invoice.dueDate} />
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-xs">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Actions</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => navigate(`/invoices/${invoice.id}`)}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View / Edit
                           </DropdownMenuItem>
-                        )}
-                        {invoice.status === 'sent' && (
-                          <DropdownMenuItem onClick={() => handleSendReminder(invoice)}>
-                            <Mail className="mr-2 h-4 w-4" />
-                            Send Reminder
+                          <DropdownMenuItem onClick={() => navigate(`/invoices/new?duplicate=${invoice.id}`)}>
+                            <Copy className="mr-2 h-4 w-4" />
+                            Duplicate
                           </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => setDeleteId(invoice.id)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              )
-            })
-          )}
-        </TableBody>
-      </Table>
+                          <DropdownMenuSeparator />
+                          {invoice.status !== 'paid' && (
+                            <DropdownMenuItem onClick={() => handleMarkPaid(invoice.id)}>
+                              <CheckCircle2 className="mr-2 h-4 w-4" />
+                              Mark Paid
+                            </DropdownMenuItem>
+                          )}
+                          {invoice.status === 'sent' && (
+                            <DropdownMenuItem onClick={() => handleSendReminder(invoice)}>
+                              <Mail className="mr-2 h-4 w-4" />
+                              Send Reminder
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => setDeleteId(invoice.id)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteId !== null} onOpenChange={(open) => { if (!open) setDeleteId(null) }}>

@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom'
-import { Sun, Moon, Monitor } from 'lucide-react'
+import { Sun, Moon, Monitor, Menu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -29,15 +29,31 @@ function getPageTitle(pathname: string): string {
   return 'Invoicer'
 }
 
-export function TopBar() {
+interface TopBarProps {
+  onMenuClick?: () => void
+}
+
+export function TopBar({ onMenuClick }: TopBarProps) {
   const location = useLocation()
   const { theme, setTheme } = useTheme()
 
   const title = getPageTitle(location.pathname)
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background/80 px-6 backdrop-blur-sm">
-      <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+    <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background/80 px-4 md:px-6 backdrop-blur-sm">
+      <div className="flex items-center gap-2">
+        {/* Hamburger menu for mobile */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="md:hidden"
+          onClick={onMenuClick}
+          aria-label="Open navigation menu"
+        >
+          <Menu className="size-5" />
+        </Button>
+        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+      </div>
 
       <div className="flex items-center gap-2">
         <DropdownMenu>

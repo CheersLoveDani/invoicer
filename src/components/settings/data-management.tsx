@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { toast } from 'sonner'
-import { db } from '@/db'
+import { db, profileService } from '@/db'
 import { format } from 'date-fns'
 import { exportAllData } from '@/lib/data-export'
 import {
@@ -10,6 +10,7 @@ import {
   type ImportData,
   type ImportCounts,
 } from '@/lib/data-import'
+import { exportInvoicesAsZip, downloadBlob, getZipFilename } from '@/lib/bulk-pdf-export'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -20,12 +21,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import {
   Download,
   Upload,
@@ -41,6 +36,7 @@ export function DataManagement() {
   const [importCounts, setImportCounts] = useState<ImportCounts | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [bulkPdfExporting, setBulkPdfExporting] = useState(false)
 
   const handleExport = async () => {
     setExporting(true)
@@ -99,6 +95,32 @@ export function DataManagement() {
     setShowConfirm(false)
     setImportData(null)
     setImportCounts(null)
+  }
+
+  const handleBulkPdfExport = async () => {
+    setBulkPdfExporting(true)
+    try {
+      const allInvoices = await db.invoices.toArray()
+
+      if (allInvoices.length === 0) {
+        toast.info('No invoices to export')
+        return
+      }
+
+      const userProfile = await profileService.get()
+
+      toast.info(`Generating ${allInvoices.length} PDF(s)...`)
+
+      const zipBlob = await exportInvoicesAsZip(allInvoices, userProfile)
+      downloadBlob(zipBlob, getZipFilename())
+
+      toast.success(`${allInvoices.length} invoice(s) exported as ZIP`)
+    } catch (err) {
+      console.error('Bulk PDF export failed:', err)
+      toast.error('Failed to export invoices as PDFs')
+    } finally {
+      setBulkPdfExporting(false)
+    }
   }
 
   return (
@@ -163,30 +185,24 @@ export function DataManagement() {
 
       <Separator />
 
-      {/* PDF Export Placeholder */}
+      {/* PDF Export Section */}
       <div className="space-y-4">
         <div>
           <h3 className="text-lg font-medium">Bulk PDF Export</h3>
           <p className="text-sm text-muted-foreground">
-            Export all invoices as individual PDF files.
+            Export all invoices as individual PDF files bundled in a ZIP archive.
           </p>
         </div>
 
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-block">
-                <Button type="button" variant="outline" disabled>
-                  <FileText className="mr-2 h-4 w-4" />
-                  Export All Invoices as PDFs
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Coming soon</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleBulkPdfExport}
+          disabled={bulkPdfExporting}
+        >
+          <FileText className="mr-2 h-4 w-4" />
+          {bulkPdfExporting ? 'Exporting...' : 'Export All Invoices as PDFs'}
+        </Button>
       </div>
 
       {/* Import Confirmation Dialog */}

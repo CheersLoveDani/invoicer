@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Plus, CheckCircle2, Trash2, FileDown } from 'lucide-react'
 import { toast } from 'sonner'
-import { db, invoiceService } from '@/db'
+import { db, invoiceService, profileService } from '@/db'
 import type { Invoice } from '@/types'
+import { exportInvoicesAsZip, downloadBlob, getZipFilename } from '@/lib/bulk-pdf-export'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -73,6 +74,7 @@ export default function InvoicesPage() {
   const [filters, setFilters] = useState<FilterState>(defaultFilters)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [showBulkDelete, setShowBulkDelete] = useState(false)
+  const [bulkExporting, setBulkExporting] = useState(false)
 
   const allInvoices = useLiveQuery(() => db.invoices.toArray()) ?? []
 
@@ -104,6 +106,28 @@ export default function InvoicesPage() {
     setShowBulkDelete(false)
   }
 
+  async function handleBulkExportPdf() {
+    if (selectedIds.length === 0) return
+
+    setBulkExporting(true)
+    try {
+      const selectedInvoices = allInvoices.filter((inv) => selectedIds.includes(inv.id))
+      const userProfile = await profileService.get()
+
+      toast.info(`Generating ${selectedInvoices.length} PDF(s)...`)
+
+      const zipBlob = await exportInvoicesAsZip(selectedInvoices, userProfile)
+      downloadBlob(zipBlob, getZipFilename())
+
+      toast.success(`${selectedInvoices.length} invoice(s) exported as ZIP`)
+    } catch (err) {
+      console.error('Bulk PDF export failed:', err)
+      toast.error('Failed to export invoices as PDFs')
+    } finally {
+      setBulkExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -127,11 +151,11 @@ export default function InvoicesPage() {
 
       {/* Bulk action bar */}
       {selectedIds.length > 0 && (
-        <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-4 py-2">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-md border bg-muted/50 px-4 py-2">
           <span className="text-sm font-medium">
             {selectedIds.length} invoice{selectedIds.length !== 1 ? 's' : ''} selected
           </span>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
             <Button variant="outline" size="sm" onClick={handleBulkMarkPaid}>
               <CheckCircle2 className="mr-1 h-4 w-4" />
               Mark Paid
@@ -140,9 +164,14 @@ export default function InvoicesPage() {
               <Trash2 className="mr-1 h-4 w-4" />
               Delete
             </Button>
-            <Button variant="outline" size="sm" disabled>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBulkExportPdf}
+              disabled={bulkExporting}
+            >
               <FileDown className="mr-1 h-4 w-4" />
-              Export as PDFs
+              {bulkExporting ? 'Exporting...' : 'Export as PDFs'}
             </Button>
           </div>
         </div>
