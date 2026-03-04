@@ -6,6 +6,8 @@ import { StatsCards } from '@/components/dashboard/stats-cards'
 import { NotificationPanel } from '@/components/dashboard/notification-panel'
 import { RecentActivity } from '@/components/dashboard/recent-activity'
 import { CalendarView } from '@/components/dashboard/calendar-view'
+import { EarningsChart } from '@/components/dashboard/earnings-chart'
+import { ClientBreakdownChart } from '@/components/dashboard/client-breakdown-chart'
 import { useNotifications } from '@/hooks/use-notifications'
 
 export default function DashboardPage() {
@@ -50,9 +52,21 @@ export default function DashboardPage() {
           <TabsTrigger value="calendar">Calendar</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="mt-4">
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Recent Activity</h3>
-            <RecentActivity />
+          <div className="space-y-6">
+            {/* Analytics */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Earnings Overview</h3>
+              <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
+                <EarningsChart />
+                <ClientBreakdownChart />
+              </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Recent Activity</h3>
+              <RecentActivity />
+            </div>
           </div>
         </TabsContent>
         <TabsContent value="calendar" className="mt-4">
