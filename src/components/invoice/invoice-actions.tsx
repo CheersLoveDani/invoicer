@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download, FileText, Save, Send } from 'lucide-react'
+import { Download, FileText, Loader2, Save, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { templateService } from '@/db'
 import type { InvoiceFormState } from '@/hooks/use-invoice-form'
@@ -23,7 +23,7 @@ import {
 
 interface InvoiceActionsProps {
   onSaveDraft: () => void
-  onDownloadPdf: () => void
+  onDownloadPdf: () => void | Promise<void>
   onSendInvoice: () => void
   isNew: boolean
   form: InvoiceFormState
@@ -39,6 +39,16 @@ export function InvoiceActions({
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [isSavingTemplate, setIsSavingTemplate] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
+
+  async function handleDownloadPdf() {
+    setIsDownloading(true)
+    try {
+      await onDownloadPdf()
+    } finally {
+      setIsDownloading(false)
+    }
+  }
 
   async function handleSaveTemplate() {
     if (!templateName.trim()) {
@@ -77,21 +87,18 @@ export function InvoiceActions({
             {isNew ? 'Save as Draft' : 'Save'}
           </Button>
 
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <Button variant="outline" disabled onClick={onDownloadPdf}>
-                    <Download className="size-4" />
-                    Download PDF
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Available after PDF generation is built</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button
+            variant="outline"
+            onClick={handleDownloadPdf}
+            disabled={isDownloading}
+          >
+            {isDownloading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
+            {isDownloading ? 'Generating...' : 'Download PDF'}
+          </Button>
 
           <TooltipProvider>
             <Tooltip>
