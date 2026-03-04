@@ -1,8 +1,15 @@
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { toast } from 'sonner'
-import { db, settingsService } from '@/db'
+import { db } from '@/db'
 import { format } from 'date-fns'
+import { exportAllData } from '@/lib/data-export'
+import {
+  parseImportFile,
+  importAllData,
+  type ImportData,
+  type ImportCounts,
+} from '@/lib/data-import'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -26,40 +33,6 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 
-interface ImportData {
-  version: number
-  exportedAt: string
-  userProfile: unknown[]
-  clients: unknown[]
-  templates: unknown[]
-  invoices: unknown[]
-  schedules: unknown[]
-  appSettings: unknown[]
-}
-
-interface ImportCounts {
-  userProfile: number
-  clients: number
-  templates: number
-  invoices: number
-  schedules: number
-  appSettings: number
-}
-
-function isValidImportData(data: unknown): data is ImportData {
-  if (typeof data !== 'object' || data === null) return false
-  const d = data as Record<string, unknown>
-  return (
-    typeof d.version === 'number' &&
-    Array.isArray(d.clients) &&
-    Array.isArray(d.invoices) &&
-    Array.isArray(d.templates) &&
-    Array.isArray(d.schedules) &&
-    Array.isArray(d.appSettings) &&
-    Array.isArray(d.userProfile)
-  )
-}
-
 export function DataManagement() {
   const settings = useLiveQuery(() => db.appSettings.get('app-settings'))
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -72,32 +45,7 @@ export function DataManagement() {
   const handleExport = async () => {
     setExporting(true)
     try {
-      const data = {
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        userProfile: await db.userProfile.toArray(),
-        clients: await db.clients.toArray(),
-        templates: await db.templates.toArray(),
-        invoices: await db.invoices.toArray(),
-        schedules: await db.schedules.toArray(),
-        appSettings: await db.appSettings.toArray(),
-      }
-
-      const blob = new Blob([JSON.stringify(data, null, 2)], {
-        type: 'application/json',
-      })
-      const url = URL.createObjectURL(blob)
-      const dateStr = format(new Date(), 'yyyy-MM-dd')
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `invoicer-backup-${dateStr}.json`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-
-      // Update last backup date
-      await settingsService.save({ lastBackupDate: new Date() })
+      await exportAllData()
       toast.success('Data exported successfully')
     } catch {
       toast.error('Failed to export data')
@@ -117,27 +65,16 @@ export function DataManagement() {
 
     try {
       const text = await file.text()
-      const parsed = JSON.parse(text)
-
-      if (!isValidImportData(parsed)) {
-        toast.error(
-          'Invalid backup file. Missing required fields (version, clients, invoices, etc.).'
-        )
-        return
-      }
-
-      setImportData(parsed)
-      setImportCounts({
-        userProfile: parsed.userProfile.length,
-        clients: parsed.clients.length,
-        templates: parsed.templates.length,
-        invoices: parsed.invoices.length,
-        schedules: parsed.schedules.length,
-        appSettings: parsed.appSettings.length,
-      })
+      const { data, counts } = parseImportFile(text)
+      setImportData(data)
+      setImportCounts(counts)
       setShowConfirm(true)
-    } catch {
-      toast.error('Failed to parse backup file. Please ensure it is valid JSON.')
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'Failed to parse backup file. Please ensure it is valid JSON.'
+      )
     }
   }
 
@@ -146,40 +83,7 @@ export function DataManagement() {
 
     setImporting(true)
     try {
-      // Clear existing data
-      await db.transaction(
-        'rw',
-        [db.userProfile, db.clients, db.templates, db.invoices, db.schedules, db.appSettings],
-        async () => {
-          await db.userProfile.clear()
-          await db.clients.clear()
-          await db.templates.clear()
-          await db.invoices.clear()
-          await db.schedules.clear()
-          await db.appSettings.clear()
-
-          // Import data
-          if (importData.userProfile.length > 0) {
-            await db.userProfile.bulkAdd(importData.userProfile as never[])
-          }
-          if (importData.clients.length > 0) {
-            await db.clients.bulkAdd(importData.clients as never[])
-          }
-          if (importData.templates.length > 0) {
-            await db.templates.bulkAdd(importData.templates as never[])
-          }
-          if (importData.invoices.length > 0) {
-            await db.invoices.bulkAdd(importData.invoices as never[])
-          }
-          if (importData.schedules.length > 0) {
-            await db.schedules.bulkAdd(importData.schedules as never[])
-          }
-          if (importData.appSettings.length > 0) {
-            await db.appSettings.bulkAdd(importData.appSettings as never[])
-          }
-        }
-      )
-
+      await importAllData(importData)
       toast.success('Data imported successfully')
       setShowConfirm(false)
       setImportData(null)
