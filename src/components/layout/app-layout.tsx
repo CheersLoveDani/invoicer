@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import { Sidebar } from '@/components/layout/sidebar'
 import { TopBar } from '@/components/layout/top-bar'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Toaster } from '@/components/ui/sonner'
 
 export function AppLayout() {
   return (
@@ -15,6 +16,7 @@ export function AppLayout() {
           </main>
         </ScrollArea>
       </div>
+      <Toaster />
     </div>
   )
 }
