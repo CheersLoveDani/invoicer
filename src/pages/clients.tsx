@@ -1,5 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ClientList } from '@/components/clients/client-list'
+import { TemplateList } from '@/components/templates/template-list'
 import { FileText, Users } from 'lucide-react'
 
 export default function ClientsPage() {
@@ -31,13 +32,7 @@ export default function ClientsPage() {
         </TabsContent>
 
         <TabsContent value="templates" className="mt-6">
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16">
-            <FileText className="mb-4 size-12 text-muted-foreground/50" />
-            <h3 className="text-lg font-medium">Templates</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Templates management coming soon.
-            </p>
-          </div>
+          <TemplateList />
         </TabsContent>
       </Tabs>
     </div>
