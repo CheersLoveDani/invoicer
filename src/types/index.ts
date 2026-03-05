@@ -50,6 +50,8 @@ export interface Client {
   invoicePrefix: string
   nextInvoiceNumber: number
   notes: string
+  emailSubject?: string
+  emailBody?: string
   createdAt: Date
   updatedAt: Date
 }

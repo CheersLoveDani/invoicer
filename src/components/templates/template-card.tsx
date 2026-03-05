@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { toast } from 'sonner'
 import { templateService, db } from '@/db'
@@ -22,7 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { TemplateFormDialog } from './template-form-dialog'
-import { FileText, Layers, Pencil, Trash2, User } from 'lucide-react'
+import { FileText, Layers, Pencil, Plus, Trash2, User } from 'lucide-react'
 
 interface TemplateCardProps {
   template: InvoiceTemplate
@@ -35,6 +36,7 @@ const PDF_TEMPLATE_LABELS: Record<string, string> = {
 }
 
 export function TemplateCard({ template }: TemplateCardProps) {
+  const navigate = useNavigate()
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -126,6 +128,14 @@ export function TemplateCard({ template }: TemplateCardProps) {
               {PDF_TEMPLATE_LABELS[template.pdfTemplate] ?? template.pdfTemplate}
             </Badge>
           </div>
+          <Button
+            size="sm"
+            className="w-full"
+            onClick={() => navigate(`/invoices/new?template=${template.id}`)}
+          >
+            <Plus className="mr-1 size-3.5" />
+            Create Invoice
+          </Button>
         </CardContent>
       </Card>
 

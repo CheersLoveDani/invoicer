@@ -29,6 +29,8 @@ interface ClientFormData {
   invoicePrefix: string
   nextInvoiceNumber: number
   notes: string
+  emailSubject: string
+  emailBody: string
 }
 
 const initialFormData: ClientFormData = {
@@ -38,6 +40,8 @@ const initialFormData: ClientFormData = {
   invoicePrefix: '',
   nextInvoiceNumber: 1,
   notes: '',
+  emailSubject: '',
+  emailBody: '',
 }
 
 export function ClientFormDialog({
@@ -60,6 +64,8 @@ export function ClientFormDialog({
           invoicePrefix: client.invoicePrefix,
           nextInvoiceNumber: client.nextInvoiceNumber,
           notes: client.notes,
+          emailSubject: client.emailSubject ?? '',
+          emailBody: client.emailBody ?? '',
         })
       } else {
         setForm(initialFormData)
@@ -95,6 +101,8 @@ export function ClientFormDialog({
           address: form.address.trim(),
           invoicePrefix: form.invoicePrefix.trim().toUpperCase(),
           notes: form.notes.trim(),
+          emailSubject: form.emailSubject.trim() || undefined,
+          emailBody: form.emailBody.trim() || undefined,
         })
         toast.success('Client updated successfully')
       } else {
@@ -105,6 +113,8 @@ export function ClientFormDialog({
           invoicePrefix: form.invoicePrefix.trim().toUpperCase(),
           nextInvoiceNumber: form.nextInvoiceNumber,
           notes: form.notes.trim(),
+          emailSubject: form.emailSubject.trim() || undefined,
+          emailBody: form.emailBody.trim() || undefined,
         })
         toast.success('Client created successfully')
       }
@@ -119,7 +129,7 @@ export function ClientFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Client' : 'Add Client'}</DialogTitle>
           <DialogDescription>
@@ -214,6 +224,34 @@ export function ClientFormDialog({
               placeholder="Notes for your reference (not shown on invoices)"
               rows={2}
             />
+          </div>
+
+          {/* Email template section */}
+          <div className="space-y-3 rounded-md border p-3">
+            <p className="text-sm font-medium">Email Template</p>
+            <p className="text-xs text-muted-foreground">
+              Customise the email subject and body shown when sending invoices.
+              Use placeholders: {'{invoiceNumber}'}, {'{amount}'}, {'{title}'}, {'{clientName}'}, {'{senderName}'}
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="client-email-subject">Subject</Label>
+              <Input
+                id="client-email-subject"
+                value={form.emailSubject}
+                onChange={(e) => updateField('emailSubject', e.target.value)}
+                placeholder="Invoice {invoiceNumber} — {senderName}"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="client-email-body">Body</Label>
+              <Textarea
+                id="client-email-body"
+                value={form.emailBody}
+                onChange={(e) => updateField('emailBody', e.target.value)}
+                placeholder={"Dear {clientName},\n\nPlease find attached invoice {invoiceNumber} for {amount} for {title}.\n\nKind regards,\n{senderName}"}
+                rows={5}
+              />
+            </div>
           </div>
 
           <DialogFooter>

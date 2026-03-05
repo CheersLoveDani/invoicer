@@ -16,6 +16,7 @@ import { toast } from 'sonner'
 import type { Invoice, Currency } from '@/types'
 import { CURRENCY_SYMBOLS } from '@/types'
 import { invoiceService } from '@/db'
+import { SendInvoiceDialog } from '@/components/invoice/send-invoice-dialog'
 import {
   Table,
   TableBody,
@@ -68,6 +69,7 @@ export function InvoiceTable({ invoices, onSelectionChange }: InvoiceTableProps)
   const [sortField, setSortField] = useState<SortField>('date')
   const [sortDir, setSortDir] = useState<SortDirection>('desc')
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [reminderEmail, setReminderEmail] = useState<{ to: string; subject: string; body: string } | null>(null)
 
   const sortedInvoices = useMemo(() => {
     const sorted = [...invoices].sort((a, b) => {
@@ -156,11 +158,11 @@ export function InvoiceTable({ invoices, onSelectionChange }: InvoiceTableProps)
   }
 
   function handleSendReminder(invoice: Invoice) {
-    const subject = encodeURIComponent(`Reminder: Invoice ${invoice.invoiceNumber}`)
-    const body = encodeURIComponent(
-      `Dear ${invoice.to.name},\n\nThis is a friendly reminder that invoice ${invoice.invoiceNumber} dated ${format(new Date(invoice.date), 'dd/MM/yyyy')} is due on ${format(new Date(invoice.dueDate), 'dd/MM/yyyy')}.\n\nPlease let us know if you have any questions.\n\nBest regards,\n${invoice.from.name}`
-    )
-    window.open(`mailto:${invoice.to.email}?subject=${subject}&body=${body}`, '_self')
+    setReminderEmail({
+      to: invoice.to.email,
+      subject: `Reminder: Invoice ${invoice.invoiceNumber}`,
+      body: `Dear ${invoice.to.name},\n\nThis is a friendly reminder that invoice ${invoice.invoiceNumber} dated ${format(new Date(invoice.date), 'dd/MM/yyyy')} is due on ${format(new Date(invoice.dueDate), 'dd/MM/yyyy')}.\n\nPlease let us know if you have any questions.\n\nBest regards,\n${invoice.from.name}`,
+    })
   }
 
   function SortIcon({ field }: { field: SortField }) {
@@ -329,6 +331,18 @@ export function InvoiceTable({ invoices, onSelectionChange }: InvoiceTableProps)
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Send reminder dialog */}
+      {reminderEmail && (
+        <SendInvoiceDialog
+          open={!!reminderEmail}
+          onOpenChange={(open) => { if (!open) setReminderEmail(null) }}
+          recipientEmail={reminderEmail.to}
+          subject={reminderEmail.subject}
+          body={reminderEmail.body}
+          onConfirmSend={() => setReminderEmail(null)}
+        />
+      )}
     </>
   )
 }

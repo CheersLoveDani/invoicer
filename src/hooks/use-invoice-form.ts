@@ -256,7 +256,7 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
               notes: template.notes,
               paymentDetails: {
                 ...paymentDetails,
-                reference: template.paymentReference,
+                reference: template.paymentReference || invoiceNumber,
               },
               currency: baseCurrency,
               pdfTemplate: template.pdfTemplate,
@@ -280,7 +280,10 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
                 address: client.address,
                 phone: '',
               },
-              paymentDetails,
+              paymentDetails: {
+                ...paymentDetails,
+                reference: invoiceNumber,
+              },
               currency: baseCurrency,
               pdfTemplate: basePdfTemplate,
               dueDate: addDays(new Date(), dueDays),
@@ -330,7 +333,7 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
               lineItems: original.lineItems.map((li) => ({ ...li, id: uuid() })),
               expenses: original.expenses.map((li) => ({ ...li, id: uuid() })),
               notes: original.notes,
-              paymentDetails: { ...original.paymentDetails },
+              paymentDetails: { ...original.paymentDetails, reference: newNumber },
               currency: original.currency,
               pdfTemplate: original.pdfTemplate,
               templateId: original.templateId,
@@ -373,7 +376,7 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
   )
 
   const setClientDetails = useCallback(
-    (client: Client | null) => {
+    async (client: Client | null) => {
       if (client === null) {
         // "Enter manually" — clear to fields so user can type
         setSelectedClient(undefined)
@@ -390,13 +393,19 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
         }))
       } else {
         setSelectedClient(client)
+        const invoiceNumber = await clientService.incrementInvoiceNumber(client.id)
         setForm((prev) => ({
           ...prev,
+          invoiceNumber,
           to: {
             name: client.name,
             email: client.email,
             address: client.address,
             phone: '',
+          },
+          paymentDetails: {
+            ...prev.paymentDetails,
+            reference: invoiceNumber,
           },
         }))
       }

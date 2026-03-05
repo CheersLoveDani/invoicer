@@ -24,7 +24,7 @@ import { db } from '@/db/database'
 import type { Invoice, Schedule, Client, InvoiceTemplate } from '@/types'
 import { CalendarDayDetail } from './calendar-day-detail'
 
-type DotColor = 'green' | 'blue' | 'red' | 'orange'
+type DotColor = 'green' | 'blue' | 'red' | 'orange' | 'gray'
 
 interface EventDot {
   color: DotColor
@@ -36,6 +36,7 @@ const DOT_COLORS: Record<DotColor, string> = {
   blue: 'bg-blue-500',
   red: 'bg-red-500',
   orange: 'bg-orange-500',
+  gray: 'bg-muted-foreground',
 }
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -93,6 +94,12 @@ export function CalendarView() {
     }
 
     for (const inv of invoices) {
+      // Gray dot: draft invoice on its date
+      if (inv.status === 'draft') {
+        addDot(toDateKey(new Date(inv.date)), { color: 'gray', label: 'Draft' })
+        addDot(toDateKey(new Date(inv.dueDate)), { color: 'gray', label: 'Due' })
+      }
+
       // Green dot: paid on that date
       if (inv.status === 'paid' && inv.paidAt) {
         const key = toDateKey(new Date(inv.paidAt))
@@ -141,14 +148,22 @@ export function CalendarView() {
     }
 
     for (const inv of invoices) {
+      // Show all invoices on their invoice date
+      addInvoice(toDateKey(new Date(inv.date)), inv)
+
+      // Show on due date for all non-paid invoices
+      if (inv.status !== 'paid') {
+        addInvoice(toDateKey(new Date(inv.dueDate)), inv)
+      }
+
+      // Show paid invoices on their paid date
       if (inv.status === 'paid' && inv.paidAt) {
         addInvoice(toDateKey(new Date(inv.paidAt)), inv)
       }
+
+      // Show sent invoices on their sent date
       if (inv.sentAt) {
         addInvoice(toDateKey(new Date(inv.sentAt)), inv)
-      }
-      if (inv.status === 'sent') {
-        addInvoice(toDateKey(new Date(inv.dueDate)), inv)
       }
     }
 

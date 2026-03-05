@@ -5,11 +5,12 @@ import { pdf } from '@react-pdf/renderer'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { useInvoiceForm } from '@/hooks/use-invoice-form'
-import { invoiceService } from '@/db'
-import { generateMailtoLink } from '@/lib/email-utils'
+import { invoiceService, clientService } from '@/db'
+import { generateEmailContent, type EmailContent } from '@/lib/email-utils'
 import { InvoiceForm } from '@/components/invoice/invoice-form'
 import { InvoiceActions } from '@/components/invoice/invoice-actions'
 import { PdfDragCard } from '@/components/invoice/pdf-drag-card'
+import { SendInvoiceDialog } from '@/components/invoice/send-invoice-dialog'
 import { PdfPreview } from '@/components/pdf/pdf-preview'
 import { InvoicePdfDocument } from '@/components/pdf/pdf-document'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -23,6 +24,9 @@ export default function InvoiceEditorPage() {
   const [showPreview, setShowPreview] = useState(false)
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null)
   const [pdfFilename, setPdfFilename] = useState('')
+  const [sendDialogOpen, setSendDialogOpen] = useState(false)
+  const [emailContent, setEmailContent] = useState<EmailContent | null>(null)
+  const [savedInvoiceId, setSavedInvoiceId] = useState<string | null>(null)
 
   const isNew = mode !== 'edit'
 
@@ -59,7 +63,8 @@ export default function InvoiceEditorPage() {
   const handleSendInvoice = useCallback(async () => {
     try {
       // 1. Save the invoice (ensures it exists in DB and we get an ID)
-      const savedId = await save()
+      const invoiceId = await save()
+      setSavedInvoiceId(invoiceId)
 
       // 2. Generate the PDF blob
       const blob = await pdf(
@@ -83,11 +88,17 @@ export default function InvoiceEditorPage() {
       setPdfBlob(blob)
       setPdfFilename(filename)
 
-      // 4. Mark the invoice as sent
-      await invoiceService.markSent(savedId)
+      // 4. Look up client email template (if a client is selected)
+      let clientTemplate: { emailSubject?: string; emailBody?: string } | undefined
+      if (invoiceForm.selectedClient) {
+        const client = await clientService.getById(invoiceForm.selectedClient.id)
+        if (client?.emailSubject || client?.emailBody) {
+          clientTemplate = { emailSubject: client.emailSubject, emailBody: client.emailBody }
+        }
+      }
 
-      // 5. Generate and open the mailto link
-      const mailtoLink = generateMailtoLink(
+      // 5. Generate email content and show dialog
+      const email = generateEmailContent(
         {
           invoiceNumber: form.invoiceNumber,
           title: form.title,
@@ -98,16 +109,26 @@ export default function InvoiceEditorPage() {
           notes: form.notes,
         },
         form.from.name,
+        clientTemplate,
       )
-      window.location.href = mailtoLink
-
-      // 6. Show toast
-      toast.success('Invoice marked as sent. Drag the PDF to attach it to your email.')
+      setEmailContent(email)
+      setSendDialogOpen(true)
     } catch (err) {
       console.error('Failed to send invoice:', err)
       toast.error('Failed to send invoice')
     }
-  }, [form, save])
+  }, [form, save, invoiceForm.selectedClient])
+
+  const handleConfirmSend = useCallback(async () => {
+    if (!savedInvoiceId) return
+    try {
+      await invoiceService.markSent(savedInvoiceId)
+      toast.success('Invoice marked as sent')
+      setSendDialogOpen(false)
+    } catch {
+      toast.error('Failed to mark invoice as sent')
+    }
+  }, [savedInvoiceId])
 
   if (isLoading) {
     return (
@@ -192,6 +213,18 @@ export default function InvoiceEditorPage() {
         isNew={isNew}
         form={form}
       />
+
+      {/* Send invoice dialog */}
+      {emailContent && (
+        <SendInvoiceDialog
+          open={sendDialogOpen}
+          onOpenChange={setSendDialogOpen}
+          recipientEmail={emailContent.to}
+          subject={emailContent.subject}
+          body={emailContent.body}
+          onConfirmSend={handleConfirmSend}
+        />
+      )}
     </div>
   )
 }

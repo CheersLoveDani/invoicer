@@ -1,6 +1,14 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { Plus, FileText } from 'lucide-react'
+import { db } from '@/db'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { StatsCards } from '@/components/dashboard/stats-cards'
 import { NotificationPanel } from '@/components/dashboard/notification-panel'
@@ -11,7 +19,9 @@ import { ClientBreakdownChart } from '@/components/dashboard/client-breakdown-ch
 import { useNotifications } from '@/hooks/use-notifications'
 
 export default function DashboardPage() {
+  const navigate = useNavigate()
   const { notifications, dismiss } = useNotifications()
+  const templates = useLiveQuery(() => db.templates.toArray()) ?? []
 
   return (
     <div className="space-y-6">
@@ -37,12 +47,24 @@ export default function DashboardPage() {
             New Invoice
           </Link>
         </Button>
-        <Button variant="outline" asChild>
-          <Link to="/invoices/new">
-            <FileText className="mr-2 h-4 w-4" />
-            New from Template
-          </Link>
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" disabled={templates.length === 0}>
+              <FileText className="mr-2 h-4 w-4" />
+              New from Template
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {templates.map((t) => (
+              <DropdownMenuItem
+                key={t.id}
+                onClick={() => navigate(`/invoices/new?template=${t.id}`)}
+              >
+                {t.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Tabs */}
