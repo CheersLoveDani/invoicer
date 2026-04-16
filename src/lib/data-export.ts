@@ -1,5 +1,6 @@
 import { format } from 'date-fns'
 import { db, settingsService } from '@/db'
+import { saveBlob } from '@/lib/native/save-file'
 
 export interface ExportData {
   version: number
@@ -29,29 +30,29 @@ export async function buildExportData(): Promise<ExportData> {
 }
 
 /**
- * Triggers a browser file download of the given export data as JSON.
- * Filename format: invoicer-backup-YYYY-MM-DD.json
+ * Saves the export data as JSON. Returns true if the file was written,
+ * false if the user cancelled the native save dialog.
  */
-export function downloadExportFile(data: ExportData): void {
+export async function downloadExportFile(data: ExportData): Promise<boolean> {
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: 'application/json',
   })
-  const url = URL.createObjectURL(blob)
   const dateStr = format(new Date(), 'yyyy-MM-dd')
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `invoicer-backup-${dateStr}.json`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  return saveBlob(blob, {
+    suggestedName: `invoicer-backup-${dateStr}.json`,
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+  })
 }
 
 /**
- * Full export flow: build data, trigger download, update lastBackupDate.
+ * Full export flow: build data, save it, update lastBackupDate on success.
+ * Returns true when the backup was actually written.
  */
-export async function exportAllData(): Promise<void> {
+export async function exportAllData(): Promise<boolean> {
   const data = await buildExportData()
-  downloadExportFile(data)
-  await settingsService.save({ lastBackupDate: new Date() })
+  const saved = await downloadExportFile(data)
+  if (saved) {
+    await settingsService.save({ lastBackupDate: new Date() })
+  }
+  return saved
 }

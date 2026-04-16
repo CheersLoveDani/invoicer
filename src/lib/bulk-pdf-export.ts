@@ -4,6 +4,7 @@ import { createElement } from 'react'
 import { format } from 'date-fns'
 import type { Invoice, UserProfile } from '@/types'
 import { InvoicePdfDocument } from '@/components/pdf/pdf-document'
+import { saveBlob, type SaveFilter } from '@/lib/native/save-file'
 
 /**
  * Generate a single PDF blob for an invoice.
@@ -74,15 +75,15 @@ export async function exportInvoicesAsZip(
 }
 
 /**
- * Trigger a browser download of a Blob.
+ * Save a Blob via the native save dialog (Tauri) or browser download (web).
+ * Returns true if the file was saved, false if the user cancelled.
  */
-export function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
+export async function downloadBlob(
+  blob: Blob,
+  filename: string,
+  filters?: SaveFilter[],
+): Promise<boolean> {
+  return saveBlob(blob, { suggestedName: filename, filters })
 }
 
 /**

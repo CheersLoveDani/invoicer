@@ -15,6 +15,7 @@ import { PdfPreview } from '@/components/pdf/pdf-preview'
 import { InvoicePdfDocument } from '@/components/pdf/pdf-document'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
+import { saveBlob } from '@/lib/native/save-file'
 
 export default function InvoiceEditorPage() {
   const { id } = useParams()
@@ -47,13 +48,13 @@ export default function InvoiceEditorPage() {
           currency={form.currency}
         />,
       ).toBlob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Invoice-${form.invoiceNumber || 'draft'}-${format(form.date, 'yyyy-MM-dd')}.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
-      toast.success('PDF downloaded')
+      const saved = await saveBlob(blob, {
+        suggestedName: `Invoice-${form.invoiceNumber || 'draft'}-${format(form.date, 'yyyy-MM-dd')}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      })
+      if (saved) {
+        toast.success('PDF downloaded')
+      }
     } catch (err) {
       console.error('Failed to generate PDF:', err)
       toast.error('Failed to generate PDF')

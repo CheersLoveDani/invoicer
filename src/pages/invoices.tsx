@@ -117,9 +117,13 @@ export default function InvoicesPage() {
       toast.info(`Generating ${selectedInvoices.length} PDF(s)...`)
 
       const zipBlob = await exportInvoicesAsZip(selectedInvoices, userProfile)
-      downloadBlob(zipBlob, getZipFilename())
+      const saved = await downloadBlob(zipBlob, getZipFilename(), [
+        { name: 'ZIP archive', extensions: ['zip'] },
+      ])
 
-      toast.success(`${selectedInvoices.length} invoice(s) exported as ZIP`)
+      if (saved) {
+        toast.success(`${selectedInvoices.length} invoice(s) exported as ZIP`)
+      }
     } catch (err) {
       console.error('Bulk PDF export failed:', err)
       toast.error('Failed to export invoices as PDFs')

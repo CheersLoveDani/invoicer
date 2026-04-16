@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { FileDown, GripVertical } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { saveBlob } from '@/lib/native/save-file'
 
 interface PdfDragCardProps {
   pdfBlob: Blob | null
@@ -32,12 +33,10 @@ export function PdfDragCard({ pdfBlob, filename }: PdfDragCardProps) {
 
   const handleClick = useCallback(() => {
     if (!pdfBlob) return
-    const url = URL.createObjectURL(pdfBlob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.click()
-    URL.revokeObjectURL(url)
+    void saveBlob(pdfBlob, {
+      suggestedName: filename,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    })
   }, [pdfBlob, filename])
 
   if (!pdfBlob) return null

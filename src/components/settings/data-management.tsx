@@ -41,8 +41,10 @@ export function DataManagement() {
   const handleExport = async () => {
     setExporting(true)
     try {
-      await exportAllData()
-      toast.success('Data exported successfully')
+      const saved = await exportAllData()
+      if (saved) {
+        toast.success('Data exported successfully')
+      }
     } catch {
       toast.error('Failed to export data')
     } finally {
@@ -112,9 +114,13 @@ export function DataManagement() {
       toast.info(`Generating ${allInvoices.length} PDF(s)...`)
 
       const zipBlob = await exportInvoicesAsZip(allInvoices, userProfile)
-      downloadBlob(zipBlob, getZipFilename())
+      const saved = await downloadBlob(zipBlob, getZipFilename(), [
+        { name: 'ZIP archive', extensions: ['zip'] },
+      ])
 
-      toast.success(`${allInvoices.length} invoice(s) exported as ZIP`)
+      if (saved) {
+        toast.success(`${allInvoices.length} invoice(s) exported as ZIP`)
+      }
     } catch (err) {
       console.error('Bulk PDF export failed:', err)
       toast.error('Failed to export invoices as PDFs')

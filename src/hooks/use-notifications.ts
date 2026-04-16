@@ -7,6 +7,7 @@ import {
   clientService,
   templateService,
 } from '@/db'
+import { nativeNotify } from '@/lib/native/notify'
 
 export interface Notification {
   id: string
@@ -19,6 +20,7 @@ export interface Notification {
 }
 
 const DISMISSED_KEY = 'invoicer-dismissed-notifications'
+const FIRED_KEY = 'invoicer-fired-notifications'
 
 function getDismissedIds(): Set<string> {
   try {
@@ -34,6 +36,26 @@ function getDismissedIds(): Set<string> {
 
 function saveDismissedIds(ids: Set<string>) {
   sessionStorage.setItem(DISMISSED_KEY, JSON.stringify(Array.from(ids)))
+}
+
+function getFiredIds(): Set<string> {
+  try {
+    const stored = localStorage.getItem(FIRED_KEY)
+    if (stored) {
+      return new Set(JSON.parse(stored) as string[])
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return new Set()
+}
+
+function saveFiredIds(ids: Set<string>) {
+  try {
+    localStorage.setItem(FIRED_KEY, JSON.stringify(Array.from(ids)))
+  } catch {
+    // ignore quota errors
+  }
 }
 
 export function useNotifications() {
@@ -125,6 +147,21 @@ export function useNotifications() {
       }
 
       setNotifications(result)
+
+      // Fire system notifications for any new (never-seen, non-dismissed) entries.
+      // No-op on web; native popup on Tauri.
+      const fired = getFiredIds()
+      const initialDismissed = getDismissedIds()
+      const fresh = result.filter(
+        (n) => !fired.has(n.id) && !initialDismissed.has(n.id),
+      )
+      if (fresh.length > 0) {
+        for (const n of fresh) {
+          void nativeNotify('Invoicer', n.message)
+          fired.add(n.id)
+        }
+        saveFiredIds(fired)
+      }
     }
 
     compute()
