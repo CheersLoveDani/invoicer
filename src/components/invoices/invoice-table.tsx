@@ -10,6 +10,7 @@ import {
   Copy,
   CheckCircle2,
   Mail,
+  Send,
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -138,6 +139,15 @@ export function InvoiceTable({ invoices, onSelectionChange }: InvoiceTableProps)
       toast.success('Invoice marked as paid')
     } catch {
       toast.error('Failed to mark invoice as paid')
+    }
+  }
+
+  async function handleMarkSent(id: string) {
+    try {
+      await invoiceService.markSent(id)
+      toast.success('Invoice marked as sent')
+    } catch {
+      toast.error('Failed to mark invoice as sent')
     }
   }
 
@@ -281,6 +291,12 @@ export function InvoiceTable({ invoices, onSelectionChange }: InvoiceTableProps)
                             Duplicate
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
+                          {invoice.status === 'draft' && (
+                            <DropdownMenuItem onClick={() => handleMarkSent(invoice.id)}>
+                              <Send className="mr-2 h-4 w-4" />
+                              Mark Sent
+                            </DropdownMenuItem>
+                          )}
                           {invoice.status !== 'paid' && (
                             <DropdownMenuItem onClick={() => handleMarkPaid(invoice.id)}>
                               <CheckCircle2 className="mr-2 h-4 w-4" />

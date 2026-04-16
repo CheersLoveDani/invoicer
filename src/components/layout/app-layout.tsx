@@ -42,7 +42,7 @@ export function AppLayout() {
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar onMenuClick={handleMenuClick} />
-        <ScrollArea className="flex-1">
+        <ScrollArea className="min-h-0 flex-1">
           <main className="p-4 md:p-6">
             <Outlet />
           </main>
