@@ -148,7 +148,7 @@ export function TemplateFormDialog({
           </SheetDescription>
         </SheetHeader>
 
-        <ScrollArea className="flex-1 px-4">
+        <ScrollArea className="min-h-0 flex-1 px-4">
           <form id="template-form" onSubmit={handleSave} className="space-y-6 pb-6">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">

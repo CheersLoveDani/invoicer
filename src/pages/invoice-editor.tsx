@@ -139,7 +139,7 @@ export default function InvoiceEditorPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] flex-col">
+    <div className="flex h-[calc(100dvh-3.5rem-2rem)] flex-col md:h-[calc(100dvh-3.5rem-3rem)]">
       {/* Header */}
       <div className="shrink-0 border-b px-6 py-4">
         <div className="flex items-center justify-between">
