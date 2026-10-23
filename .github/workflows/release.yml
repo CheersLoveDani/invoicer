@@ -1,0 +1,70 @@
+name: Release
+
+# Push a tag like v0.2.0 (matching "version" in package.json) to build and
+# publish installers. The desktop app updates itself from the latest.json this
+# workflow attaches to the release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  desktop:
+    name: Desktop (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            args: ''
+          - name: Linux
+            os: ubuntu-22.04
+            args: ''
+          - name: macOS Apple silicon
+            os: macos-latest
+            args: --target aarch64-apple-darwin
+          - name: macOS Intel
+            os: macos-latest
+            args: --target x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ startsWith(matrix.os, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.args }}
+      - name: Install system libraries
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: npm ci
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Invoicer ${{ github.ref_name }}
+          releaseBody: See the commit history for what changed. Installed apps update themselves.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          # The desktop jobs all rewrite latest.json and can trip over each other.
+          retryAttempts: 3
+          args: ${{ matrix.args }}

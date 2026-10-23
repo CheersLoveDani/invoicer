@@ -1,8 +1,10 @@
 [package]
 name = "invoicer"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local-first invoice app for freelancers"
 authors = ["Dani Fullerton"]
+license = "MIT"
+repository = "https://github.com/CheersLoveDani/invoicer"
 edition = "2021"
 
 [lib]
@@ -17,8 +19,14 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-fs = "2"
+tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# In-place updates from GitHub releases, desktop only.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
