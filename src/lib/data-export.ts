@@ -18,7 +18,7 @@ export interface ExportData {
  */
 export async function buildExportData(): Promise<ExportData> {
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     userProfile: await db.userProfile.toArray(),
     clients: await db.clients.toArray(),
@@ -50,9 +50,12 @@ export async function downloadExportFile(data: ExportData): Promise<boolean> {
  */
 export async function exportAllData(): Promise<boolean> {
   const data = await buildExportData()
+  // The backup records itself, so restoring it does not bring back an old reminder
+  const backedUpAt = new Date()
+  data.appSettings = data.appSettings.map((s) => ({ ...(s as object), lastBackupDate: backedUpAt }))
   const saved = await downloadExportFile(data)
   if (saved) {
-    await settingsService.save({ lastBackupDate: new Date() })
+    await settingsService.save({ lastBackupDate: backedUpAt })
   }
   return saved
 }

@@ -1,10 +1,21 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@fontsource-variable/schibsted-grotesk";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+    --font-sans: "Schibsted Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-info: var(--info);
+    --color-info-foreground: var(--info-foreground);
+    --shadow-card: var(--shadow-card-value);
+    --shadow-lift: var(--shadow-lift-value);
+    --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);
     --radius-lg: var(--radius);
@@ -45,80 +56,170 @@
     --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/*
+ * Palette: cool paper, ink, and cheque-book green. The sidebar carries the
+ * one bold surface; everything else stays quiet so amounts read first.
+ */
 :root {
     --radius: 0.625rem;
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.646 0.222 41.116);
-    --chart-2: oklch(0.6 0.118 184.704);
-    --chart-3: oklch(0.398 0.07 227.392);
-    --chart-4: oklch(0.828 0.189 84.429);
-    --chart-5: oklch(0.769 0.188 70.08);
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --background: #f4f7f5;
+    --foreground: #15201c;
+    --card: #ffffff;
+    --card-foreground: #15201c;
+    --popover: #ffffff;
+    --popover-foreground: #15201c;
+    --primary: #0e6b55;
+    --primary-foreground: #f2fbf7;
+    --secondary: #e8eeeb;
+    --secondary-foreground: #1b2a24;
+    --muted: #eaf0ed;
+    --muted-foreground: #5d6c66;
+    --accent: #e3ece8;
+    --accent-foreground: #15201c;
+    --destructive: #c0362c;
+    --success: #0e6b55;
+    --success-foreground: #e3f4ed;
+    --warning: #a86200;
+    --warning-foreground: #fcf0dc;
+    --info: #2f5fd0;
+    --info-foreground: #e6edfc;
+    --border: #dce4e0;
+    --input: #d3ddd8;
+    --ring: #0e6b55;
+    /* Categorical, fixed order; validated for CVD and contrast on the card surface */
+    --chart-1: #0a7d5e;
+    --chart-2: #2f5fd0;
+    --chart-3: #b07a0c;
+    --chart-4: #8a5cc7;
+    --chart-5: #c0362c;
+    --chart-other: #8b9a94;
+    --sidebar: #0f2a23;
+    --sidebar-foreground: #c9ddd5;
+    --sidebar-primary: #7fdcbb;
+    --sidebar-primary-foreground: #0b201a;
+    --sidebar-accent: #183a31;
+    --sidebar-accent-foreground: #f2fbf7;
+    --sidebar-border: #1d3b33;
+    --sidebar-ring: #7fdcbb;
+    --shadow-card-value: 0 1px 2px rgb(21 32 28 / 0.04), 0 1px 1px rgb(21 32 28 / 0.03);
+    --shadow-lift-value: 0 12px 32px -12px rgb(14 60 48 / 0.22), 0 2px 6px rgb(21 32 28 / 0.05);
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.488 0.243 264.376);
-    --chart-2: oklch(0.696 0.17 162.48);
-    --chart-3: oklch(0.769 0.188 70.08);
-    --chart-4: oklch(0.627 0.265 303.9);
-    --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --background: #0c1210;
+    --foreground: #e4ece8;
+    --card: #131b18;
+    --card-foreground: #e4ece8;
+    --popover: #16201c;
+    --popover-foreground: #e4ece8;
+    --primary: #4fc3a0;
+    --primary-foreground: #04201a;
+    --secondary: #1c2723;
+    --secondary-foreground: #e4ece8;
+    --muted: #1a2420;
+    --muted-foreground: #8ea19a;
+    --accent: #1e2b26;
+    --accent-foreground: #e4ece8;
+    --destructive: #ef6a5e;
+    --success: #4fc3a0;
+    --success-foreground: #10302a;
+    --warning: #f0a83a;
+    --warning-foreground: #33240c;
+    --info: #7ea2ff;
+    --info-foreground: #17223f;
+    --border: #23302b;
+    --input: #2a3833;
+    --ring: #4fc3a0;
+    --chart-1: #38a885;
+    --chart-2: #6b8ff0;
+    --chart-3: #b47c1c;
+    --chart-4: #a27ae0;
+    --chart-5: #e0584c;
+    --chart-other: #5e6e68;
+    --sidebar: #08100d;
+    --sidebar-foreground: #a9bdb5;
+    --sidebar-primary: #4fc3a0;
+    --sidebar-primary-foreground: #04201a;
+    --sidebar-accent: #13221d;
+    --sidebar-accent-foreground: #f2fbf7;
+    --sidebar-border: #16241f;
+    --sidebar-ring: #4fc3a0;
+    --shadow-card-value: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-lift-value: 0 16px 40px -16px rgb(0 0 0 / 0.6), 0 2px 6px rgb(0 0 0 / 0.3);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
+  html {
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
   body {
-    @apply bg-background text-foreground;
-    }
+    @apply bg-background font-sans text-foreground;
+  }
+  ::selection {
+    @apply bg-primary/20;
+  }
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+}
+
+/* Lining figures for amounts and numbers. The face's tabular figures widen
+   the comma and point too, which reads as "£4 , 650 . 00", so stay proportional. */
+@utility tabular {
+  font-variant-numeric: lining-nums;
+}
+
+/* One entrance per page: the content settles in, children staggered by --i. */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pop {
+  0% { transform: scale(0.92); opacity: 0; }
+  60% { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+@utility animate-page {
+  animation: page-enter 420ms var(--ease-out-soft) both;
+}
+@utility animate-rise {
+  animation: rise 480ms var(--ease-out-soft) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+@utility animate-pop {
+  animation: pop 320ms var(--ease-out-soft) both;
+}
+@utility skeleton {
+  border-radius: var(--radius-md);
+  background: linear-gradient(90deg, var(--muted) 25%, var(--accent) 50%, var(--muted) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+/* Thin, quiet scrollbars that match the surface they sit on. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--muted-foreground) 35%, transparent) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
 }

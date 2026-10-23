@@ -7,17 +7,20 @@ export const scheduleService = {
     return db.schedules.toArray()
   },
 
+  async getById(id: string): Promise<Schedule | undefined> {
+    return db.schedules.get(id)
+  },
+
   async getActive(): Promise<Schedule[]> {
-    return db.schedules.where('active').equals(1).toArray()
+    // `active` is a boolean, which IndexedDB cannot index
+    return db.schedules.filter((s) => s.active).toArray()
   },
 
   async getDueSoon(withinDays: number): Promise<Schedule[]> {
     const now = new Date()
     const cutoff = new Date(now.getTime() + withinDays * 24 * 60 * 60 * 1000)
     return db.schedules
-      .where('active')
-      .equals(1)
-      .filter((s) => s.nextDueDate <= cutoff)
+      .filter((s) => s.active && new Date(s.nextDueDate) <= cutoff)
       .toArray()
   },
 

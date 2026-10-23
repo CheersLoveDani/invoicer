@@ -4,45 +4,11 @@ import { createElement } from 'react'
 import { format } from 'date-fns'
 import type { Invoice, UserProfile } from '@/types'
 import { InvoicePdfDocument } from '@/components/pdf/pdf-document'
+import { invoicePdfFilename, invoicePdfProps } from '@/lib/invoice-pdf'
 import { saveBlob, type SaveFilter } from '@/lib/native/save-file'
 
-/**
- * Generate a single PDF blob for an invoice.
- */
-async function generateInvoicePdf(
-  invoice: Invoice,
-  _userProfile: UserProfile,
-): Promise<Blob> {
-  const element = createElement(InvoicePdfDocument, {
-    template: invoice.pdfTemplate,
-    title: invoice.title,
-    invoiceNumber: invoice.invoiceNumber,
-    date: invoice.date,
-    from: invoice.from,
-    to: {
-      name: invoice.to.name,
-      email: invoice.to.email,
-      address: invoice.to.address,
-    },
-    lineItems: invoice.lineItems,
-    expenses: invoice.expenses,
-    notes: invoice.notes,
-    paymentDetails: invoice.paymentDetails,
-    currency: invoice.currency,
-  })
-
-  return pdf(element).toBlob()
-}
-
-/**
- * Generate a safe filename for an invoice PDF.
- */
-function getInvoiceFilename(invoice: Invoice): string {
-  const number = invoice.invoiceNumber || 'draft'
-  const date = format(new Date(invoice.date), 'yyyy-MM-dd')
-  // Sanitize filename: remove characters that are not safe
-  const safeName = `Invoice-${number}-${date}.pdf`.replace(/[<>:"/\\|?*]/g, '_')
-  return safeName
+async function generateInvoicePdf(invoice: Invoice, userProfile: UserProfile): Promise<Blob> {
+  return pdf(createElement(InvoicePdfDocument, invoicePdfProps(invoice, userProfile.logo))).toBlob()
 }
 
 /**
@@ -63,7 +29,9 @@ export async function exportInvoicesAsZip(
   for (let i = 0; i < invoices.length; i++) {
     const invoice = invoices[i]
     const pdfBlob = await generateInvoicePdf(invoice, userProfile)
-    const filename = getInvoiceFilename(invoice)
+    // Two drafts on the same day would otherwise share a name and overwrite each other
+    let filename = invoicePdfFilename(invoice)
+    for (let n = 2; zip.file(filename); n++) filename = invoicePdfFilename(invoice).replace(/\.pdf$/, ` (${n}).pdf`)
     zip.file(filename, pdfBlob)
 
     if (onProgress) {

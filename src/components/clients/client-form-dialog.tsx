@@ -100,6 +100,7 @@ export function ClientFormDialog({
           email: form.email.trim(),
           address: form.address.trim(),
           invoicePrefix: form.invoicePrefix.trim().toUpperCase(),
+          nextInvoiceNumber: form.nextInvoiceNumber,
           notes: form.notes.trim(),
           emailSubject: form.emailSubject.trim() || undefined,
           emailBody: form.emailBody.trim() || undefined,
@@ -182,9 +183,10 @@ export function ClientFormDialog({
                 Short code used in invoice numbers
               </p>
             </div>
-            {!isEdit && (
               <div className="space-y-2">
-                <Label htmlFor="client-start-number">Starting Invoice #</Label>
+                <Label htmlFor="client-start-number">
+                  {isEdit ? 'Next Invoice #' : 'Starting Invoice #'}
+                </Label>
                 <Input
                   id="client-start-number"
                   type="number"
@@ -198,10 +200,11 @@ export function ClientFormDialog({
                   }
                 />
                 <p className="text-xs text-muted-foreground">
-                  First invoice number for this client
+                  {isEdit
+                    ? 'Moves on by itself each time an invoice is sent'
+                    : 'First invoice number for this client'}
                 </p>
               </div>
-            )}
           </div>
 
           <div className="space-y-2">

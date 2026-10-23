@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { toast } from 'sonner'
-import { templateService, clientService } from '@/db'
+import { templateService, clientService, profileService } from '@/db'
 import type { InvoiceTemplate, LineItem, PdfTemplate } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -66,6 +66,7 @@ export function TemplateFormDialog({
   const [form, setForm] = useState<TemplateFormData>(initialFormData)
 
   const clients = useLiveQuery(() => clientService.getAll())
+  const currency = useLiveQuery(async () => (await profileService.get()).defaultCurrency) ?? 'GBP'
 
   useEffect(() => {
     if (open) {
@@ -116,15 +117,15 @@ export function TemplateFormDialog({
 
       if (isEdit && template) {
         await templateService.update(template.id, data)
-        toast.success('Template updated successfully')
+        toast.success('Template saved')
       } else {
         await templateService.create(data)
-        toast.success('Template created successfully')
+        toast.success('Template created')
       }
       onOpenChange(false)
       onSaved?.()
     } catch {
-      toast.error(isEdit ? 'Failed to update template' : 'Failed to create template')
+      toast.error('The template was not saved. Try again.')
     } finally {
       setSaving(false)
     }
@@ -139,12 +140,12 @@ export function TemplateFormDialog({
       >
         <SheetHeader>
           <SheetTitle>
-            {isEdit ? 'Edit Template' : 'New Template'}
+            {isEdit ? 'Edit template' : 'New template'}
           </SheetTitle>
           <SheetDescription>
             {isEdit
-              ? 'Update the template details below.'
-              : 'Create a reusable invoice template with predefined line items.'}
+              ? 'Changes apply to invoices you start from this template from now on.'
+              : 'Start invoices you send often already filled in.'}
           </SheetDescription>
         </SheetHeader>
 
@@ -153,7 +154,7 @@ export function TemplateFormDialog({
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="template-name">
-                  Template Name <span className="text-destructive">*</span>
+                  Name <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="template-name"
@@ -164,7 +165,7 @@ export function TemplateFormDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="template-client">Linked Client</Label>
+                <Label htmlFor="template-client">Client</Label>
                 <Select
                   value={form.clientId}
                   onValueChange={(value) =>
@@ -192,51 +193,59 @@ export function TemplateFormDialog({
                 id="template-title"
                 value={form.title}
                 onChange={(e) => updateField('title', e.target.value)}
-                placeholder="e.g. Monthly Development Invoice"
+                placeholder="e.g. Monthly development work"
               />
             </div>
 
             <Separator />
 
-            <LineItemEditor
-              label="Line Items"
-              items={form.lineItems}
-              onChange={(lineItems) => updateField('lineItems', lineItems)}
-            />
-
-            <Separator />
-
-            <LineItemEditor
-              label="Expenses"
-              items={form.expenses}
-              onChange={(expenses) => updateField('expenses', expenses)}
-            />
+            <div className="space-y-2">
+              <Label>Work</Label>
+              <LineItemEditor
+                items={form.lineItems}
+                onChange={(lineItems) => updateField('lineItems', lineItems)}
+                currency={currency}
+              />
+            </div>
 
             <Separator />
 
             <div className="space-y-2">
-              <Label htmlFor="template-notes">Default Notes / Payment Terms</Label>
+              <Label>Expenses</Label>
+              <LineItemEditor
+                items={form.expenses}
+                onChange={(expenses) => updateField('expenses', expenses)}
+                currency={currency}
+                kind="expenses"
+              />
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label htmlFor="template-notes">Notes</Label>
               <Textarea
                 id="template-notes"
                 value={form.notes}
                 onChange={(e) => updateField('notes', e.target.value)}
-                placeholder="Payment terms, bank details, or other notes to include on invoices"
+                placeholder="Payment terms or anything else to show on these invoices"
                 rows={3}
               />
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="template-payment-ref">Payment Reference</Label>
+                <Label htmlFor="template-payment-ref">Payment reference</Label>
                 <Input
                   id="template-payment-ref"
                   value={form.paymentReference}
                   onChange={(e) => updateField('paymentReference', e.target.value)}
-                  placeholder="e.g. INV-{number}"
+                  placeholder="Leave empty to use the invoice number"
                 />
+                <p className="text-xs text-muted-foreground">{'{number}'} is replaced by the invoice number.</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="template-pdf">PDF Template</Label>
+                <Label htmlFor="template-pdf">PDF style</Label>
                 <Select
                   value={form.pdfTemplate}
                   onValueChange={(value) =>
@@ -266,13 +275,7 @@ export function TemplateFormDialog({
             Cancel
           </Button>
           <Button type="submit" form="template-form" disabled={saving}>
-            {saving
-              ? isEdit
-                ? 'Saving...'
-                : 'Creating...'
-              : isEdit
-                ? 'Save Changes'
-                : 'Create Template'}
+            {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create template'}
           </Button>
         </SheetFooter>
       </SheetContent>

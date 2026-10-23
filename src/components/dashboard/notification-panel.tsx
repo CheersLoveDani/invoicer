@@ -1,88 +1,109 @@
 import { useNavigate } from 'react-router-dom'
-import { Bell, AlertTriangle, CalendarClock, Database, X } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Bell, AlertTriangle, CalendarClock, DatabaseBackup, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { Notification } from '@/hooks/use-notifications'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { useNotifications, type Notification } from '@/hooks/use-notifications'
+import { cn } from '@/lib/utils'
 
-interface NotificationPanelProps {
-  notifications: Notification[]
+const ICONS = {
+  overdue: { icon: AlertTriangle, className: 'bg-warning/12 text-warning' },
+  'schedule-due': { icon: CalendarClock, className: 'bg-info/10 text-info' },
+  'backup-reminder': { icon: DatabaseBackup, className: 'bg-muted text-muted-foreground' },
+} as const
+
+function NotificationRow({
+  notification,
+  onDismiss,
+  onAction,
+  index,
+}: {
+  notification: Notification
   onDismiss: (id: string) => void
+  onAction: (url: string) => void
+  index: number
+}) {
+  const { icon: Icon, className } = ICONS[notification.type]
+  return (
+    <div
+      className="group flex animate-rise items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/60"
+      style={{ '--i': index } as React.CSSProperties}
+    >
+      <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-lg', className)}>
+        <Icon className="size-4" />
+      </span>
+      <p className="min-w-0 flex-1 text-sm leading-snug">{notification.message}</p>
+      {notification.actionUrl && (
+        <Button variant="outline" size="xs" onClick={() => onAction(notification.actionUrl!)}>
+          {notification.actionLabel}
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+        onClick={() => onDismiss(notification.id)}
+        aria-label="Dismiss"
+      >
+        <X />
+      </Button>
+    </div>
+  )
 }
 
-function getNotificationIcon(type: Notification['type']) {
-  switch (type) {
-    case 'overdue':
-      return <AlertTriangle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
-    case 'schedule-due':
-      return <CalendarClock className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-    case 'backup-reminder':
-      return <Database className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-  }
-}
-
-function getNotificationBorderClass(type: Notification['type']) {
-  switch (type) {
-    case 'overdue':
-      return 'border-l-red-500'
-    case 'schedule-due':
-      return 'border-l-blue-500'
-    case 'backup-reminder':
-      return 'border-l-amber-500'
-  }
-}
-
-export function NotificationPanel({ notifications, onDismiss }: NotificationPanelProps) {
+/** The dashboard's list of things to deal with; hidden when there are none. */
+export function NotificationPanel() {
   const navigate = useNavigate()
-
-  if (notifications.length === 0) {
-    return null
-  }
+  const { notifications, dismiss } = useNotifications()
+  if (notifications.length === 0) return null
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Bell className="h-4 w-4" />
-          Notifications
-          <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
-            {notifications.length}
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {notifications.map((notification) => (
-          <div
-            key={notification.id}
-            className={`flex items-center gap-3 rounded-md border-l-4 bg-muted/40 px-3 py-2.5 ${getNotificationBorderClass(notification.type)}`}
-          >
-            {getNotificationIcon(notification.type)}
-            <p className={`min-w-0 flex-1 text-sm ${notification.type === 'overdue' ? 'font-medium' : ''}`}>
-              {notification.message}
-            </p>
-            <div className="flex shrink-0 items-center gap-1">
-              {notification.actionUrl && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => navigate(notification.actionUrl!)}
-                >
-                  {notification.actionLabel}
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                onClick={() => onDismiss(notification.id)}
-                aria-label="Dismiss notification"
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
+    <section className="rounded-xl border bg-card p-3 shadow-card">
+      <h3 className="px-2 pt-1 pb-2 text-sm font-semibold">Needs attention</h3>
+      <div className="space-y-0.5">
+        {notifications.map((n, i) => (
+          <NotificationRow key={n.id} notification={n} index={i} onDismiss={dismiss} onAction={navigate} />
         ))}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
+  )
+}
+
+/** Top-bar bell; shows how many notifications are waiting. */
+export function NotificationBell() {
+  const navigate = useNavigate()
+  const { notifications, dismiss } = useNotifications()
+  const count = notifications.length
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="relative text-muted-foreground"
+          aria-label={count ? `${count} notifications` : 'Notifications'}
+        >
+          <Bell className="size-4" />
+          {count > 0 && (
+            <span
+              key={count}
+              className="absolute top-1 right-1 flex size-2 animate-pop rounded-full bg-warning ring-2 ring-background"
+            />
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-96 p-2">
+        <p className="px-2 pt-1 pb-2 text-sm font-semibold">Notifications</p>
+        {count === 0 ? (
+          <p className="px-2 pb-3 text-sm text-muted-foreground">Nothing needs your attention.</p>
+        ) : (
+          <div className="max-h-96 space-y-0.5 overflow-y-auto">
+            {notifications.map((n, i) => (
+              <NotificationRow key={n.id} notification={n} index={i} onDismiss={dismiss} onAction={navigate} />
+            ))}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   )
 }

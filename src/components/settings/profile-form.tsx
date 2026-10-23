@@ -87,7 +87,7 @@ export function ProfileForm() {
       {/* Personal Information */}
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium">Personal Information</h3>
+          <h3 className="text-[15px] font-semibold">Personal Information</h3>
           <p className="text-sm text-muted-foreground">
             This information appears on your invoices.
           </p>
@@ -164,7 +164,7 @@ export function ProfileForm() {
       {/* Bank Details */}
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium">Bank Details</h3>
+          <h3 className="text-[15px] font-semibold">Bank Details</h3>
           <p className="text-sm text-muted-foreground">
             Payment details shown on your invoices.
           </p>
@@ -220,7 +220,7 @@ export function ProfileForm() {
       {/* Logo */}
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium">Logo</h3>
+          <h3 className="text-[15px] font-semibold">Logo</h3>
           <p className="text-sm text-muted-foreground">
             Your logo will appear on generated invoices.
           </p>

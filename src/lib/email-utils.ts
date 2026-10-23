@@ -1,4 +1,6 @@
-import { CURRENCY_SYMBOLS, type Currency } from '@/types'
+import type { Currency } from '@/types'
+import { formatCurrency } from '@/lib/pdf-utils'
+import { isTauri } from '@/lib/runtime'
 
 export interface EmailContent {
   to: string
@@ -37,8 +39,7 @@ export function generateEmailContent(
     (sum, li) => sum + li.price,
     0,
   )
-  const symbol = CURRENCY_SYMBOLS[invoice.currency]
-  const amount = `${symbol}${total.toFixed(2)}`
+  const amount = formatCurrency(total, invoice.currency)
 
   const vars: Record<string, string> = {
     invoiceNumber: invoice.invoiceNumber,
@@ -60,5 +61,21 @@ export function generateEmailContent(
     to: invoice.to.email,
     subject,
     body,
+  }
+}
+
+export function mailtoUrl({ to, subject, body }: EmailContent): string {
+  // encodeURIComponent keeps line breaks as %0A, which mail apps expect
+  return `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+}
+
+/** Open a pre-filled draft in the system's mail app. */
+export async function openEmailDraft(email: EmailContent): Promise<void> {
+  const url = mailtoUrl(email)
+  if (isTauri()) {
+    const { openUrl } = await import('@tauri-apps/plugin-opener')
+    await openUrl(url)
+  } else {
+    window.location.href = url
   }
 }

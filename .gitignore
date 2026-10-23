@@ -27,3 +27,13 @@ dist-ssr
 src-tauri/target
 src-tauri/gen/schemas
 src-tauri/icon-source.png
+
+# Never commit personal data: backups, exported invoices, keys
+invoicer-backup-*.json
+invoices-export-*.zip
+Invoice-*.pdf
+*.pdf
+*.key
+*.pem
+.env
+.env.*

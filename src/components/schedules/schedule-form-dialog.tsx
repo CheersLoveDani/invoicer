@@ -68,11 +68,12 @@ export function ScheduleFormDialog({
 
   const clients = useLiveQuery(() => clientService.getAll())
 
+  // The client's own templates, plus any not tied to a client
   const templates = useLiveQuery(
-    () =>
-      form.clientId
-        ? templateService.getByClientId(form.clientId)
-        : templateService.getAll(),
+    async () =>
+      (await templateService.getAll()).filter(
+        (t) => !form.clientId || !t.clientId || t.clientId === form.clientId,
+      ),
     [form.clientId],
   )
 
@@ -102,8 +103,6 @@ export function ScheduleFormDialog({
 
   // When client changes, reset template if the current template doesn't belong to the new client
   const handleClientChange = (clientId: string) => {
-    updateField('clientId', clientId)
-    // Reset template selection when client changes
     setForm((prev) => ({ ...prev, clientId, templateId: '' }))
   }
 

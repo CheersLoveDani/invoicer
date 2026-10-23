@@ -1,73 +1,44 @@
-# React + TypeScript + Vite
+# Invoicer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A local-first invoicing app for freelancers. Create invoices from client presets and templates, keep track of what has been sent, paid or is overdue, and send polished PDFs from your own mail app. Everything stays on your computer: there is no server and no account.
 
-Currently, two official plugins are available:
+## What it does
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Invoice numbers that follow what you actually sent.** Each client has a prefix (for example `ACME`) and the next number is worked out from the last invoice you sent or marked paid. Opening a new invoice, or abandoning a draft, never uses a number up. The dashboard lists every client's next number.
+- **Editor with a live PDF preview**, three PDF styles (Clean, Modern, Compact), your logo, hourly and fixed-price work, and expenses.
+- **Templates and schedules** for repeat invoices, with reminders when one is due.
+- **Sending**: opens a ready-made draft in your mail app and gives you a PDF card to drag onto it.
+- **Dashboard**: what is waiting to be paid, what is overdue, monthly earnings by client, a calendar, and anything that needs attention.
+- **Backups**: export everything to a JSON file and restore it later.
+- **Automatic updates** in the desktop app.
 
-## React Compiler
+## Install
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Download the installer for your platform from the [latest release](https://github.com/CheersLoveDani/invoicer/releases/latest). Once installed, Invoicer checks for new versions on launch and every few hours, downloads them in the background, and asks before restarting to install.
 
-## Expanding the ESLint configuration
+Your invoices, clients and settings are kept in the app's own storage on your computer. They are never uploaded anywhere, and they are not part of this repository.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Develop
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+Requires Node 22 and, for the desktop app, a [Rust toolchain and the Tauri prerequisites](https://tauri.app/start/prerequisites/).
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev         # web app at http://localhost:5173
+npm run tauri:dev   # desktop app
+npm run lint
+npm run build       # type-check and build the web app
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Stack: React 19, TypeScript, Vite, Tailwind CSS 4 with shadcn/ui, Dexie (IndexedDB), @react-pdf/renderer, Recharts and Tauri 2.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Releasing
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+1. Bump `version` in `package.json` (Tauri reads it from there) and `src-tauri/Cargo.toml`.
+2. Commit, then tag and push: `git tag v0.3.0 && git push origin v0.3.0`.
+
+The release workflow builds Windows, macOS and Linux installers, signs the update bundles with the `TAURI_SIGNING_PRIVATE_KEY` repository secret, and attaches a `latest.json` that installed apps update from. The matching public key is in `src-tauri/tauri.conf.json`.
+
+## License
+
+[MIT](LICENSE)

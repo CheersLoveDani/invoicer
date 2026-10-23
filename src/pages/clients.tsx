@@ -3,18 +3,15 @@ import { ClientList } from '@/components/clients/client-list'
 import { TemplateList } from '@/components/templates/template-list'
 import { ScheduleList } from '@/components/schedules/schedule-list'
 import { CalendarClock, FileText, Users } from 'lucide-react'
+import { PageHeader } from '@/components/layout/page-header'
 
 export default function ClientsPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">
-          Clients & Templates
-        </h2>
-        <p className="mt-1 text-muted-foreground">
-          Manage your clients, invoice templates, and recurring schedules.
-        </p>
-      </div>
+      <PageHeader
+        title="Clients & templates"
+        description="Who you bill, what you bill them for, and when it repeats."
+      />
 
       <Tabs defaultValue="clients">
         <TabsList>
@@ -32,15 +29,15 @@ export default function ClientsPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="clients" className="mt-6">
+        <TabsContent value="clients" className="mt-5 animate-page">
           <ClientList />
         </TabsContent>
 
-        <TabsContent value="templates" className="mt-6">
+        <TabsContent value="templates" className="mt-5 animate-page">
           <TemplateList />
         </TabsContent>
 
-        <TabsContent value="schedules" className="mt-6">
+        <TabsContent value="schedules" className="mt-5 animate-page">
           <ScheduleList />
         </TabsContent>
       </Tabs>

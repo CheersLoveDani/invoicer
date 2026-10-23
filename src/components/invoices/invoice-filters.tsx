@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { cn } from '@/lib/utils'
+import { isOverdue } from '@/lib/invoice-amounts'
 
 export interface FilterState {
   search: string
@@ -29,6 +30,7 @@ export interface FilterState {
   currency: string
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const defaultFilters: FilterState = {
   search: '',
   status: [],
@@ -55,6 +57,9 @@ export function InvoiceFilters({ filters, onChange }: InvoiceFiltersProps) {
     new Set(invoices.map((inv) => inv.currency).filter(Boolean))
   ).sort()
 
+  const statusCounts = { draft: 0, sent: 0, paid: 0, overdue: 0 }
+  for (const inv of invoices) statusCounts[isOverdue(inv) ? 'overdue' : inv.status]++
+
   const hasActiveFilters =
     filters.search !== '' ||
     filters.status.length > 0 ||
@@ -77,27 +82,40 @@ export function InvoiceFilters({ filters, onChange }: InvoiceFiltersProps) {
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Search invoices..."
+          placeholder="Number, client or title"
           value={filters.search}
           onChange={(e) => onChange({ ...filters, search: e.target.value })}
-          className="w-[200px] pl-8"
+          className="h-8 w-[220px] pl-8"
         />
       </div>
 
       {/* Status toggles */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5 rounded-lg border bg-card p-0.5 shadow-xs" role="group" aria-label="Filter by status">
         {STATUS_OPTIONS.map((s) => {
           const isActive = filters.status.includes(s)
           return (
-            <Button
+            <button
               key={s}
-              variant={isActive ? 'default' : 'outline'}
-              size="sm"
+              type="button"
+              aria-pressed={isActive}
               onClick={() => toggleStatus(s)}
-              className="capitalize"
+              className={cn(
+                'flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-sm font-medium capitalize transition-[background-color,color] duration-150',
+                isActive
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+              )}
             >
               {s}
-            </Button>
+              <span
+                className={cn(
+                  'text-xs tabular',
+                  isActive ? 'text-primary-foreground/75' : 'text-muted-foreground/70',
+                )}
+              >
+                {statusCounts[s]}
+              </span>
+            </button>
           )
         })}
       </div>
@@ -110,7 +128,7 @@ export function InvoiceFilters({ filters, onChange }: InvoiceFiltersProps) {
             onChange({ ...filters, clientName: value === '__all__' ? '' : value })
           }
         >
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger size="sm" className="w-[160px]">
             <SelectValue placeholder="All clients" />
           </SelectTrigger>
           <SelectContent>
@@ -135,10 +153,10 @@ export function InvoiceFilters({ filters, onChange }: InvoiceFiltersProps) {
               !filters.dateRange.from && 'text-muted-foreground'
             )}
           >
-            <CalendarIcon className="mr-1 h-4 w-4" />
+            <CalendarIcon className="h-4 w-4" />
             {filters.dateRange.from
-              ? format(filters.dateRange.from, 'dd/MM/yyyy')
-              : 'From date'}
+              ? format(filters.dateRange.from, 'd MMM yyyy')
+              : 'From'}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
@@ -166,10 +184,10 @@ export function InvoiceFilters({ filters, onChange }: InvoiceFiltersProps) {
               !filters.dateRange.to && 'text-muted-foreground'
             )}
           >
-            <CalendarIcon className="mr-1 h-4 w-4" />
+            <CalendarIcon className="h-4 w-4" />
             {filters.dateRange.to
-              ? format(filters.dateRange.to, 'dd/MM/yyyy')
-              : 'To date'}
+              ? format(filters.dateRange.to, 'd MMM yyyy')
+              : 'To'}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
@@ -194,7 +212,7 @@ export function InvoiceFilters({ filters, onChange }: InvoiceFiltersProps) {
             onChange({ ...filters, currency: value === '__all__' ? '' : value })
           }
         >
-          <SelectTrigger className="w-[120px]">
+          <SelectTrigger size="sm" className="w-[130px]">
             <SelectValue placeholder="Currency" />
           </SelectTrigger>
           <SelectContent>

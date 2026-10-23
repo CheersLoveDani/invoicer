@@ -179,6 +179,7 @@ export function ModernTemplate({
   title,
   invoiceNumber,
   date,
+  dueDate,
   from,
   to,
   lineItems,
@@ -210,6 +211,7 @@ export function ModernTemplate({
               <Text style={styles.title}>{title || 'Invoice'}</Text>
               <Text style={styles.metaText}>Invoice #{invoiceNumber}</Text>
               <Text style={styles.metaText}>Date: {formatDate(date)}</Text>
+              {dueDate ? <Text style={styles.metaText}>Due: {formatDate(dueDate)}</Text> : null}
             </View>
             {logo ? <Image style={styles.logo} src={logo} /> : null}
           </View>

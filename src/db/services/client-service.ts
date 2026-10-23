@@ -1,6 +1,12 @@
 import { v4 as uuid } from 'uuid'
 import { db } from '@/db/database'
-import type { Client } from '@/types'
+import type { Client, Invoice } from '@/types'
+import {
+  invoiceBelongsTo,
+  isNumberUsed,
+  parseInvoiceNumber,
+  suggestNextNumber,
+} from '@/db/services/invoice-numbering'
 
 export const clientService = {
   async getAll(): Promise<Client[]> {
@@ -43,21 +49,39 @@ export const clientService = {
     await db.clients.update(id, { ...data, updatedAt: new Date() })
   },
 
+  /** Removes the client and its schedules; its templates stay, unlinked. Invoices keep their snapshot. */
   async delete(id: string): Promise<void> {
-    await db.clients.delete(id)
+    await db.transaction('rw', db.clients, db.schedules, db.templates, async () => {
+      await db.schedules.where('clientId').equals(id).delete()
+      await db.templates.where('clientId').equals(id).modify({ clientId: undefined })
+      await db.clients.delete(id)
+    })
   },
 
-  async incrementInvoiceNumber(id: string): Promise<string> {
+  /** The invoice number to offer for a new invoice. Reserves nothing. */
+  async suggestInvoiceNumber(id: string, excludeInvoiceId?: string): Promise<string> {
     const client = await db.clients.get(id)
     if (!client) {
       throw new Error(`Client not found: ${id}`)
     }
-    const number = client.nextInvoiceNumber
-    const formatted = `${client.invoicePrefix}${String(number).padStart(4, '0')}`
-    await db.clients.update(id, {
-      nextInvoiceNumber: number + 1,
-      updatedAt: new Date(),
-    })
-    return formatted
+    const invoices = await db.invoices.toArray()
+    return suggestNextNumber(client, invoices, excludeInvoiceId)
+  },
+
+  /** The client a stored invoice was billed to, including invoices made before clientId was stored. */
+  async findForInvoice(invoice: Invoice): Promise<Client | undefined> {
+    if (invoice.clientId) return db.clients.get(invoice.clientId)
+    const clients = await db.clients.toArray()
+    return clients.find((client) => invoiceBelongsTo(client, invoice))
+  },
+
+  /** Once an invoice is sent or paid, the client's sequence moves past its number. */
+  async recordNumberUsed(invoice: Invoice): Promise<void> {
+    if (!isNumberUsed(invoice)) return
+    const client = await clientService.findForInvoice(invoice)
+    if (!client) return
+    const n = parseInvoiceNumber(client.invoicePrefix, invoice.invoiceNumber)
+    if (n === null || n < client.nextInvoiceNumber) return
+    await db.clients.update(client.id, { nextInvoiceNumber: n + 1, updatedAt: new Date() })
   },
 }

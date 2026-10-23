@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, CheckCircle2, Trash2, FileDown } from 'lucide-react'
+import { endOfDay, startOfDay } from 'date-fns'
+import { Plus, CheckCircle2, Trash2, FileDown, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { db, invoiceService, profileService } from '@/db'
 import type { Invoice } from '@/types'
 import { exportInvoicesAsZip, downloadBlob, getZipFilename } from '@/lib/bulk-pdf-export'
+import { isOverdue } from '@/lib/invoice-amounts'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -17,52 +19,46 @@ import {
 } from '@/components/ui/dialog'
 import { InvoiceFilters, defaultFilters, type FilterState } from '@/components/invoices/invoice-filters'
 import { InvoiceTable } from '@/components/invoices/invoice-table'
-
-function isOverdue(invoice: Invoice): boolean {
-  return invoice.status === 'sent' && new Date(invoice.dueDate) < new Date()
-}
+import { PageHeader } from '@/components/layout/page-header'
 
 function applyFilters(invoices: Invoice[], filters: FilterState): Invoice[] {
   let result = invoices
 
-  // Search filter
   if (filters.search) {
     const q = filters.search.toLowerCase()
     result = result.filter(
       (inv) =>
         inv.invoiceNumber.toLowerCase().includes(q) ||
         inv.to.name.toLowerCase().includes(q) ||
-        inv.title.toLowerCase().includes(q)
+        inv.title.toLowerCase().includes(q),
     )
   }
 
-  // Status filter
   if (filters.status.length > 0) {
     result = result.filter((inv) => {
-      if (filters.status.includes('overdue') && isOverdue(inv)) return true
+      const overdue = isOverdue(inv)
+      if (filters.status.includes('overdue') && overdue) return true
       if (filters.status.includes('draft') && inv.status === 'draft') return true
-      if (filters.status.includes('sent') && inv.status === 'sent' && !isOverdue(inv)) return true
+      if (filters.status.includes('sent') && inv.status === 'sent' && !overdue) return true
       if (filters.status.includes('paid') && inv.status === 'paid') return true
       return false
     })
   }
 
-  // Client name filter
   if (filters.clientName) {
     result = result.filter((inv) => inv.to.name === filters.clientName)
   }
 
-  // Date range filter
+  // Whole days: an invoice dated today is inside a range that ends today
   if (filters.dateRange.from) {
-    const from = filters.dateRange.from
+    const from = startOfDay(filters.dateRange.from)
     result = result.filter((inv) => new Date(inv.date) >= from)
   }
   if (filters.dateRange.to) {
-    const to = filters.dateRange.to
+    const to = endOfDay(filters.dateRange.to)
     result = result.filter((inv) => new Date(inv.date) <= to)
   }
 
-  // Currency filter
   if (filters.currency) {
     result = result.filter((inv) => inv.currency === filters.currency)
   }
@@ -70,135 +66,164 @@ function applyFilters(invoices: Invoice[], filters: FilterState): Invoice[] {
   return result
 }
 
+const plural = (n: number) => `${n} invoice${n !== 1 ? 's' : ''}`
+
 export default function InvoicesPage() {
   const [filters, setFilters] = useState<FilterState>(defaultFilters)
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [selection, setSelection] = useState<Set<string>>(new Set())
   const [showBulkDelete, setShowBulkDelete] = useState(false)
   const [bulkExporting, setBulkExporting] = useState(false)
 
-  const allInvoices = useLiveQuery(() => db.invoices.toArray()) ?? []
+  const liveInvoices = useLiveQuery(() => db.invoices.toArray())
+  const allInvoices = useMemo(() => liveInvoices ?? [], [liveInvoices])
 
   const filteredInvoices = useMemo(
     () => applyFilters(allInvoices, filters),
-    [allInvoices, filters]
+    [allInvoices, filters],
   )
+
+  // Only rows that are visible count as selected, so a bulk action never
+  // touches invoices hidden by a filter or already deleted
+  const selectedIds = useMemo(() => {
+    const visible = new Set(filteredInvoices.map((inv) => inv.id))
+    return new Set([...selection].filter((id) => visible.has(id)))
+  }, [selection, filteredInvoices])
+  const selected = filteredInvoices.filter((inv) => selectedIds.has(inv.id))
+  const unpaidSelected = selected.filter((inv) => inv.status !== 'paid')
 
   async function handleBulkMarkPaid() {
     try {
-      for (const id of selectedIds) {
-        await invoiceService.markPaid(id)
+      for (const inv of unpaidSelected) {
+        await invoiceService.markPaid(inv.id)
       }
-      toast.success(`${selectedIds.length} invoice(s) marked as paid`)
-      setSelectedIds([])
+      toast.success(`${plural(unpaidSelected.length)} marked as paid`)
+      setSelection(new Set())
     } catch {
-      toast.error('Failed to mark invoices as paid')
+      toast.error('Some invoices could not be marked as paid. Try again.')
     }
   }
 
   async function handleBulkDelete() {
     try {
-      await invoiceService.deleteMultiple(selectedIds)
-      toast.success(`${selectedIds.length} invoice(s) deleted`)
-      setSelectedIds([])
+      await invoiceService.deleteMultiple([...selectedIds])
+      toast.success(`${plural(selectedIds.size)} deleted`)
+      setSelection(new Set())
     } catch {
-      toast.error('Failed to delete invoices')
+      toast.error('The invoices could not be deleted. Try again.')
     }
     setShowBulkDelete(false)
   }
 
   async function handleBulkExportPdf() {
-    if (selectedIds.length === 0) return
+    if (selected.length === 0) return
 
     setBulkExporting(true)
+    const progress = toast.loading(`Making ${plural(selected.length)} into PDFs…`)
     try {
-      const selectedInvoices = allInvoices.filter((inv) => selectedIds.includes(inv.id))
       const userProfile = await profileService.get()
-
-      toast.info(`Generating ${selectedInvoices.length} PDF(s)...`)
-
-      const zipBlob = await exportInvoicesAsZip(selectedInvoices, userProfile)
+      const zipBlob = await exportInvoicesAsZip(selected, userProfile)
+      toast.dismiss(progress)
       const saved = await downloadBlob(zipBlob, getZipFilename(), [
         { name: 'ZIP archive', extensions: ['zip'] },
       ])
-
       if (saved) {
-        toast.success(`${selectedInvoices.length} invoice(s) exported as ZIP`)
+        toast.success(`${plural(selected.length)} saved as a ZIP`)
       }
     } catch (err) {
       console.error('Bulk PDF export failed:', err)
-      toast.error('Failed to export invoices as PDFs')
+      toast.dismiss(progress)
+      toast.error('The PDFs could not be made. Try again.')
     } finally {
       setBulkExporting(false)
     }
   }
 
-  return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Invoices</h2>
-          <p className="text-muted-foreground">
-            Manage your invoices here.
-          </p>
-        </div>
-        <Button asChild>
-          <Link to="/invoices/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Invoice
-          </Link>
-        </Button>
-      </div>
+  const filtersActive = filteredInvoices.length !== allInvoices.length
 
-      {/* Filters */}
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="Invoices"
+        description={
+          liveInvoices === undefined
+            ? ' '
+            : filtersActive
+              ? `Showing ${filteredInvoices.length} of ${plural(allInvoices.length)}`
+              : plural(allInvoices.length)
+        }
+        actions={
+          <Button asChild>
+            <Link to="/invoices/new">
+              <Plus />
+              New invoice
+            </Link>
+          </Button>
+        }
+      />
+
       <InvoiceFilters filters={filters} onChange={setFilters} />
 
-      {/* Bulk action bar */}
-      {selectedIds.length > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-md border bg-muted/50 px-4 py-2">
-          <span className="text-sm font-medium">
-            {selectedIds.length} invoice{selectedIds.length !== 1 ? 's' : ''} selected
-          </span>
-          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-            <Button variant="outline" size="sm" onClick={handleBulkMarkPaid}>
-              <CheckCircle2 className="mr-1 h-4 w-4" />
-              Mark Paid
+      <InvoiceTable
+        invoices={filteredInvoices}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelection}
+        filtered={allInvoices.length > 0}
+      />
+
+      {/* Bulk actions float in when something is selected */}
+      {selectedIds.size > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-30 flex justify-center px-4 md:pl-60">
+          <div
+            key="bulk"
+            className="pointer-events-auto flex animate-rise flex-wrap items-center gap-1.5 rounded-2xl border bg-popover/95 p-1.5 pl-4 shadow-lift backdrop-blur"
+          >
+            <span className="mr-2 text-sm font-medium tabular">{selectedIds.size} selected</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleBulkMarkPaid}
+              disabled={unpaidSelected.length === 0}
+            >
+              <CheckCircle2 />
+              Mark as paid
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setShowBulkDelete(true)}>
-              <Trash2 className="mr-1 h-4 w-4" />
+            <Button variant="ghost" size="sm" onClick={handleBulkExportPdf} disabled={bulkExporting}>
+              <FileDown />
+              {bulkExporting ? 'Saving…' : 'Save PDFs'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setShowBulkDelete(true)}
+            >
+              <Trash2 />
               Delete
             </Button>
             <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBulkExportPdf}
-              disabled={bulkExporting}
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setSelection(new Set())}
+              aria-label="Clear selection"
             >
-              <FileDown className="mr-1 h-4 w-4" />
-              {bulkExporting ? 'Exporting...' : 'Export as PDFs'}
+              <X />
             </Button>
           </div>
         </div>
       )}
 
-      {/* Table */}
-      <InvoiceTable invoices={filteredInvoices} onSelectionChange={setSelectedIds} />
-
-      {/* Bulk delete confirmation */}
       <Dialog open={showBulkDelete} onOpenChange={setShowBulkDelete}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Invoices</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedIds.length} invoice{selectedIds.length !== 1 ? 's' : ''}? This action cannot be undone.
-            </DialogDescription>
+            <DialogTitle>Delete {plural(selectedIds.size)}?</DialogTitle>
+            <DialogDescription>They are removed for good. This cannot be undone.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowBulkDelete(false)}>
-              Cancel
+              Keep them
             </Button>
             <Button variant="destructive" onClick={handleBulkDelete}>
-              Delete {selectedIds.length} invoice{selectedIds.length !== 1 ? 's' : ''}
+              Delete {plural(selectedIds.size)}
             </Button>
           </DialogFooter>
         </DialogContent>

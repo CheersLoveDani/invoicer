@@ -1,43 +1,42 @@
-import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
+import { isOverdue } from '@/lib/invoice-amounts'
 import type { InvoiceStatus } from '@/types'
 
 interface InvoiceStatusBadgeProps {
   status: InvoiceStatus
   dueDate: Date
+  className?: string
 }
 
-export function InvoiceStatusBadge({ status, dueDate }: InvoiceStatusBadgeProps) {
-  if (status === 'draft') {
-    return (
-      <Badge variant="secondary">
-        Draft
-      </Badge>
-    )
-  }
+const STYLES = {
+  draft: 'bg-muted text-muted-foreground ring-border',
+  sent: 'bg-info/10 text-info ring-info/20',
+  overdue: 'bg-warning/12 text-warning ring-warning/25',
+  paid: 'bg-success/10 text-success ring-success/20',
+} as const
 
-  if (status === 'sent') {
-    const isOverdue = new Date(dueDate) < new Date()
-    if (isOverdue) {
-      return (
-        <Badge variant="destructive">
-          Overdue
-        </Badge>
-      )
-    }
-    return (
-      <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-        Sent
-      </Badge>
-    )
-  }
+const LABELS = { draft: 'Draft', sent: 'Sent', overdue: 'Overdue', paid: 'Paid' } as const
 
-  if (status === 'paid') {
-    return (
-      <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-        Paid
-      </Badge>
-    )
-  }
-
-  return null
+export function InvoiceStatusBadge({ status, dueDate, className }: InvoiceStatusBadgeProps) {
+  const shown = isOverdue({ status, dueDate }) ? 'overdue' : status
+  return (
+    <span
+      // Re-keyed on change so a status update visibly lands
+      key={shown}
+      className={cn(
+        'inline-flex animate-pop items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
+        STYLES[shown],
+        className,
+      )}
+    >
+      <span
+        className={cn(
+          'size-1.5 rounded-full bg-current',
+          shown === 'draft' && 'opacity-60',
+          shown === 'overdue' && 'animate-pulse',
+        )}
+      />
+      {LABELS[shown]}
+    </span>
+  )
 }

@@ -3,6 +3,12 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { toast } from 'sonner'
 import { clientService, db } from '@/db'
 import type { Client } from '@/types'
+import {
+  formatInvoiceNumber,
+  invoiceBelongsTo,
+  lastUsedNumber,
+  suggestNextNumber,
+} from '@/db/services/invoice-numbering'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -41,13 +47,17 @@ export function ClientCard({ client }: ClientCardProps) {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  const invoiceCount = useLiveQuery(
-    () =>
-      db.invoices
-        .filter((inv) => inv.to.name === client.name)
-        .count(),
-    [client.name],
-  )
+  const numbering = useLiveQuery(async () => {
+    const all = await db.invoices.toArray()
+    const mine = all.filter((inv) => invoiceBelongsTo(client, inv))
+    const last = lastUsedNumber(client, mine)
+    return {
+      count: mine.length,
+      last: last === null ? null : formatInvoiceNumber(client.invoicePrefix, last),
+      next: suggestNextNumber(client, all),
+    }
+  }, [client])
+  const invoiceCount = numbering?.count
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -56,7 +66,7 @@ export function ClientCard({ client }: ClientCardProps) {
       toast.success(`Deleted client "${client.name}"`)
       setDeleteOpen(false)
     } catch {
-      toast.error('Failed to delete client')
+      toast.error('The client was not deleted. Try again.')
     } finally {
       setDeleting(false)
     }
@@ -64,7 +74,7 @@ export function ClientCard({ client }: ClientCardProps) {
 
   return (
     <>
-      <Card className="transition-shadow hover:shadow-md">
+<Card className="transition-[box-shadow,transform,border-color] duration-200 ease-out-soft hover:-translate-y-0.5 hover:border-foreground/15 hover:shadow-lift">
         <CardHeader>
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
@@ -75,7 +85,7 @@ export function ClientCard({ client }: ClientCardProps) {
               </CardDescription>
             </div>
             {client.invoicePrefix && (
-              <Badge variant="secondary" className="shrink-0 font-mono text-xs">
+              <Badge variant="secondary" className="shrink-0 text-xs">
                 {client.invoicePrefix}
               </Badge>
             )}
@@ -110,6 +120,16 @@ export function ClientCard({ client }: ClientCardProps) {
         </CardHeader>
 
         <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded-lg bg-muted/60 px-3 py-2">
+              <p className="text-xs text-muted-foreground">Last sent</p>
+              <p className="font-medium tabular">{numbering?.last ?? '—'}</p>
+            </div>
+            <div className="rounded-lg bg-primary/8 px-3 py-2 ring-1 ring-primary/15">
+              <p className="text-xs text-muted-foreground">Next up</p>
+              <p className="font-semibold text-primary tabular">{numbering?.next ?? '—'}</p>
+            </div>
+          </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <FileText className="size-3.5" />
@@ -149,16 +169,6 @@ export function ClientCard({ client }: ClientCardProps) {
                   <p className="whitespace-pre-line">{client.notes}</p>
                 </div>
               )}
-              <div>
-                <p className="mb-1 font-medium text-muted-foreground">
-                  Next Invoice Number
-                </p>
-                <p className="font-mono">
-                  {client.invoicePrefix
-                    ? `${client.invoicePrefix}${String(client.nextInvoiceNumber).padStart(4, '0')}`
-                    : client.nextInvoiceNumber}
-                </p>
-              </div>
             </div>
           )}
         </CardContent>
@@ -173,11 +183,9 @@ export function ClientCard({ client }: ClientCardProps) {
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete Client</DialogTitle>
+            <DialogTitle>Delete {client.name}?</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete{' '}
-              <span className="font-semibold text-foreground">{client.name}</span>?
-              This action cannot be undone.
+              Their schedules are removed and their templates are unlinked. Invoices already made keep the client's details.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -193,7 +201,7 @@ export function ClientCard({ client }: ClientCardProps) {
               onClick={handleDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting...' : 'Delete'}
+              {deleting ? 'Deleting…' : 'Delete client'}
             </Button>
           </DialogFooter>
         </DialogContent>

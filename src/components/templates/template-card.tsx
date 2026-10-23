@@ -58,7 +58,7 @@ export function TemplateCard({ template }: TemplateCardProps) {
       toast.success(`Deleted template "${template.name}"`)
       setDeleteOpen(false)
     } catch {
-      toast.error('Failed to delete template')
+      toast.error('The template was not deleted. Try again.')
     } finally {
       setDeleting(false)
     }
@@ -66,7 +66,7 @@ export function TemplateCard({ template }: TemplateCardProps) {
 
   return (
     <>
-      <Card className="transition-shadow hover:shadow-md">
+<Card className="transition-[box-shadow,transform,border-color] duration-200 ease-out-soft hover:-translate-y-0.5 hover:border-foreground/15 hover:shadow-lift">
         <CardHeader>
           <div className="min-w-0 flex-1">
             <CardTitle className="truncate text-base">
@@ -148,13 +148,9 @@ export function TemplateCard({ template }: TemplateCardProps) {
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete Template</DialogTitle>
+            <DialogTitle>Delete {template.name}?</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete{' '}
-              <span className="font-semibold text-foreground">
-                {template.name}
-              </span>
-              ? This action cannot be undone.
+              Schedules that use it are removed too. Invoices already made from it stay as they are.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -170,7 +166,7 @@ export function TemplateCard({ template }: TemplateCardProps) {
               onClick={handleDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting...' : 'Delete'}
+              {deleting ? 'Deleting…' : 'Delete template'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -30,7 +30,7 @@ export function TemplateList() {
         <div className="relative flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search templates..."
+            placeholder="Search templates"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -38,41 +38,45 @@ export function TemplateList() {
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="size-4" />
-          Add Template
+          New template
         </Button>
       </div>
 
       {templates === undefined ? (
-        <div className="py-12 text-center text-muted-foreground">
-          Loading templates...
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-40 skeleton rounded-xl" />
+          ))}
         </div>
       ) : filteredTemplates.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16">
+        <div className="flex animate-page flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
           <FileText className="mb-4 size-12 text-muted-foreground/50" />
           {search.trim() ? (
             <>
-              <h3 className="text-lg font-medium">No templates found</h3>
+              <h3 className="text-[15px] font-semibold">No templates found</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                No templates match "{search}". Try a different search term.
+                Nothing matches "{search}".
               </p>
             </>
           ) : (
             <>
-              <h3 className="text-lg font-medium">No templates yet</h3>
+              <h3 className="text-[15px] font-semibold">No templates yet</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Create a reusable invoice template to speed up invoicing.
+                Save the work and expenses you bill often, and start each invoice already filled in.
               </p>
               <Button className="mt-4" onClick={() => setCreateOpen(true)}>
                 <Plus className="size-4" />
-                Add Your First Template
+                Create a template
               </Button>
             </>
           )}
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredTemplates.map((template) => (
-            <TemplateCard key={template.id} template={template} />
+          {filteredTemplates.map((template, i) => (
+            <div key={template.id} className="animate-rise" style={{ '--i': i } as React.CSSProperties}>
+              <TemplateCard template={template} />
+            </div>
           ))}
         </div>
       )}

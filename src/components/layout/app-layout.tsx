@@ -1,9 +1,11 @@
 import { useState, useCallback } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar, SidebarContent } from '@/components/layout/sidebar'
 import { TopBar } from '@/components/layout/top-bar'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { UpdateNotifier } from '@/components/layout/update-notifier'
 import { Toaster } from '@/components/ui/sonner'
+import { NotificationsProvider } from '@/hooks/use-notifications'
+import { cn } from '@/lib/utils'
 import {
   Sheet,
   SheetContent,
@@ -13,25 +15,24 @@ import {
 
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { pathname } = useLocation()
+  // The editor keeps one instance from /invoices/new to /invoices/:id, so it
+  // shares one key and is not replayed (or remounted) when a draft is saved
+  const isEditor = pathname.startsWith('/invoices/')
+  const pageKey = isEditor ? 'editor' : pathname
 
-  const handleMenuClick = useCallback(() => {
-    setMobileOpen(true)
-  }, [])
-
-  const handleNavClick = useCallback(() => {
-    setMobileOpen(false)
-  }, [])
+  const handleMenuClick = useCallback(() => setMobileOpen(true), [])
+  const handleNavClick = useCallback(() => setMobileOpen(false), [])
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Desktop sidebar */}
+    <NotificationsProvider>
+    <div className="flex h-screen overflow-hidden bg-sidebar">
       <Sidebar />
 
-      {/* Mobile sidebar sheet */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent
           side="left"
-          className="w-60 p-0 bg-sidebar text-sidebar-foreground"
+          className="w-64 border-0 bg-sidebar p-0 text-sidebar-foreground"
           showCloseButton={false}
         >
           <SheetTitle className="sr-only">Navigation</SheetTitle>
@@ -40,15 +41,29 @@ export function AppLayout() {
         </SheetContent>
       </Sheet>
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      {/* The work surface sits on the sidebar like a sheet of paper */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background md:my-2 md:mr-2 md:rounded-2xl md:shadow-[0_0_0_1px_rgb(0_0_0/0.04),0_8px_30px_-12px_rgb(0_0_0/0.35)]">
         <TopBar onMenuClick={handleMenuClick} />
-        <ScrollArea className="min-h-0 flex-1">
-          <main className="p-4 md:p-6">
+        <main
+          className={cn(
+            'min-h-0 flex-1',
+            isEditor ? 'flex flex-col overflow-hidden' : 'overflow-y-auto',
+          )}
+        >
+          <div
+            key={pageKey}
+            className={cn(
+              'animate-page',
+              isEditor ? 'flex min-h-0 flex-1 flex-col' : 'mx-auto max-w-7xl px-4 pt-2 pb-10 md:px-8',
+            )}
+          >
             <Outlet />
-          </main>
-        </ScrollArea>
+          </div>
+        </main>
       </div>
       <Toaster />
+      <UpdateNotifier />
     </div>
+    </NotificationsProvider>
   )
 }

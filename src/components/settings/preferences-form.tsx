@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { toast } from 'sonner'
 import { settingsService, db } from '@/db'
@@ -42,9 +42,11 @@ export function PreferencesForm() {
     }
   )
 
-  // Sync form state when settings load from DB
+  // Fill the form once when settings load; later saves (such as a theme change) must not wipe edits
+  const loaded = useRef(false)
   useEffect(() => {
-    if (settings) {
+    if (settings && !loaded.current) {
+      loaded.current = true
       setForm({
         theme: settings.theme,
         defaultDueDays: settings.defaultDueDays,
@@ -60,7 +62,7 @@ export function PreferencesForm() {
   ) => {
     setForm((prev) => ({ ...prev, [key]: value }))
 
-    // Apply theme change immediately for instant feedback
+    // The theme applies and saves straight away
     if (key === 'theme') {
       setTheme(value as Theme)
     }
@@ -71,9 +73,9 @@ export function PreferencesForm() {
     setSaving(true)
     try {
       await settingsService.save(form)
-      toast.success('Preferences saved successfully')
+      toast.success('Preferences saved')
     } catch {
-      toast.error('Failed to save preferences')
+      toast.error('Preferences were not saved. Try again.')
     } finally {
       setSaving(false)
     }
@@ -84,9 +86,9 @@ export function PreferencesForm() {
       {/* Appearance */}
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium">Appearance</h3>
+          <h3 className="text-[15px] font-semibold">Appearance</h3>
           <p className="text-sm text-muted-foreground">
-            Customize the look and feel of the application.
+            Changes apply straight away.
           </p>
         </div>
 
@@ -110,18 +112,18 @@ export function PreferencesForm() {
         </div>
       </div>
 
-      {/* Invoice Defaults */}
+      {/* Invoice defaults */}
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium">Invoice Defaults</h3>
+          <h3 className="text-[15px] font-semibold">Invoice defaults</h3>
           <p className="text-sm text-muted-foreground">
-            Default values for new invoices.
+            Used when you start a new invoice.
           </p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="defaultDueDays">Default Due Date Period (days)</Label>
+            <Label htmlFor="defaultDueDays">Payment due after (days)</Label>
             <Input
               id="defaultDueDays"
               type="number"
@@ -136,12 +138,12 @@ export function PreferencesForm() {
               }
             />
             <p className="text-xs text-muted-foreground">
-              Number of days from invoice date until payment is due.
+              0 means due on receipt.
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="defaultPdfTemplate">Default PDF Template</Label>
+            <Label htmlFor="defaultPdfTemplate">PDF style</Label>
             <Select
               value={form.defaultPdfTemplate}
               onValueChange={(val) =>
@@ -169,15 +171,15 @@ export function PreferencesForm() {
       {/* Backup Settings */}
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium">Backup Reminders</h3>
+          <h3 className="text-[15px] font-semibold">Backup reminders</h3>
           <p className="text-sm text-muted-foreground">
-            Configure how often you are reminded to back up your data.
+            Your data lives only on this computer, so back it up now and then.
           </p>
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="backupReminderDays">
-            Reminder Interval (days)
+            Remind me after (days)
           </Label>
           <Input
             id="backupReminderDays"
@@ -194,15 +196,15 @@ export function PreferencesForm() {
             }
           />
           <p className="text-xs text-muted-foreground">
-            Set to 0 to disable backup reminders.
+            0 turns reminders off.
           </p>
         </div>
       </div>
 
       <div className="flex justify-end">
         <Button type="submit" disabled={saving}>
-          <Save className="mr-2 h-4 w-4" />
-          {saving ? 'Saving...' : 'Save Preferences'}
+          <Save />
+          {saving ? 'Saving…' : 'Save preferences'}
         </Button>
       </div>
     </form>

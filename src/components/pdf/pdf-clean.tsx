@@ -6,6 +6,7 @@ export interface PdfTemplateProps {
   title: string
   invoiceNumber: string
   date: Date
+  dueDate?: Date
   from: { name: string; email: string; address: string; phone: string }
   to: { name: string; email: string; address: string }
   lineItems: LineItem[]
@@ -190,6 +191,7 @@ export function CleanTemplate({
   title,
   invoiceNumber,
   date,
+  dueDate,
   from,
   to,
   lineItems,
@@ -220,6 +222,7 @@ export function CleanTemplate({
                 <View style={styles.headerRow}>
                   <Text style={styles.headerText}>Invoice: {invoiceNumber}</Text>
                   <Text style={styles.headerText}>Date: {formatDate(date)}</Text>
+                  {dueDate ? <Text style={styles.headerText}>Due: {formatDate(dueDate)}</Text> : null}
                 </View>
               </View>
               <Image style={styles.logo} src={logo} />
@@ -230,6 +233,7 @@ export function CleanTemplate({
               <View style={styles.headerRow}>
                 <Text style={styles.headerText}>Invoice: {invoiceNumber}</Text>
                 <Text style={styles.headerText}>Date: {formatDate(date)}</Text>
+                  {dueDate ? <Text style={styles.headerText}>Due: {formatDate(dueDate)}</Text> : null}
               </View>
             </View>
           )}

@@ -21,7 +21,7 @@ npm run preview   # Preview production build locally
 ## Tech Stack
 
 - **Framework:** React 19 + TypeScript 5.9, Vite 7
-- **Styling:** Tailwind CSS 4 + shadcn/ui (not yet initialized)
+- **Styling:** Tailwind CSS 4 + shadcn/ui; design tokens and motion utilities (`animate-page`, `animate-rise`, `animate-pop`, `tabular`, `skeleton`) live in `src/index.css`
 - **Data:** Dexie.js (IndexedDB) — all data local, no backend
 - **PDF:** @react-pdf/renderer for client-side PDF generation
 - **Charts:** Recharts for dashboard visualizations
@@ -42,13 +42,19 @@ All data lives in IndexedDB via Dexie.js. Data access must be abstracted behind 
 - **AppSettings** — singleton for theme, defaults, backup config
 
 ### Overdue Detection
-Computed at runtime, not stored. An invoice is overdue if `status === 'sent' && now > dueDate`.
+Computed at runtime, not stored, by `isOverdue()` in `src/lib/invoice-amounts.ts`: an invoice is overdue if `status === 'sent'` and the whole of its due day has passed.
+
+### Invoice Numbering
+`src/db/services/invoice-numbering.ts`. Opening an invoice reserves nothing: the suggested number is one after the client's last *sent or paid* invoice (or `client.nextInvoiceNumber` if higher), skipping numbers held by other invoices such as drafts. `client.nextInvoiceNumber` only moves on when an invoice is sent or paid (`clientService.recordNumberUsed`). Invoices store `clientId`; older ones are matched by prefix.
 
 ### PDF Templates
 Three styles built with @react-pdf/renderer: Clean (minimal), Modern (accent color), Compact (dense). All support logo, currency formatting, work items + expenses sections.
 
 ### Email Flow
-Uses `mailto:` links with pre-filled fields. Draggable PDF card for drag-to-email attachment (HTML5 Drag API with DownloadURL).
+The send dialog opens a pre-filled `mailto:` draft (via `@tauri-apps/plugin-opener` in the desktop app) and shows copyable fields. Draggable PDF card for drag-to-email attachment (HTML5 Drag API with DownloadURL).
+
+### Desktop Updates
+`src/lib/native/updater.ts` uses `@tauri-apps/plugin-updater`: checks on launch and every 6 hours, downloads in the background, and only installs (restarts) when the user clicks Restart. Releases are built by `.github/workflows/release.yml` on a `v*` tag; update bundles are signed with the `TAURI_SIGNING_PRIVATE_KEY` repo secret (public key in `tauri.conf.json`). The app version comes from `package.json`.
 
 ## App Structure (5 pages)
 
@@ -60,6 +66,7 @@ Uses `mailto:` links with pre-filled fields. Draggable PDF card for drag-to-emai
 
 ## Conventions
 
+- **Data:** Never commit personal data (backups, exported PDFs, real client details). Use made-up examples such as `ACME`.
 - **Commits:** Never include "Claude" or "Co-Authored-By" lines in commit messages
 - Path alias: `@` maps to `src/`
 - Strict TypeScript: `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch` all enabled

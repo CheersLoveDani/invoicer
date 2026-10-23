@@ -1,3 +1,4 @@
+import { endOfDay } from 'date-fns'
 import type { Invoice } from '@/types'
 
 export type ChartViewMode = 'income' | 'expense' | 'combined' | 'split'
@@ -9,8 +10,6 @@ export const VIEW_MODE_LABELS: Record<ChartViewMode, string> = {
   split: 'Income vs expenses',
 }
 
-export const INCOME_COLOR = 'hsl(142, 71%, 45%)'
-export const EXPENSE_COLOR = 'hsl(0, 84%, 60%)'
 
 export function incomeAmount(invoice: Invoice): number {
   return invoice.lineItems.reduce((sum, li) => sum + li.price, 0)
@@ -32,4 +31,13 @@ export function amountForMode(
     case 'combined':
       return incomeAmount(invoice) + expenseAmount(invoice)
   }
+}
+
+export function invoiceTotal(invoice: Pick<Invoice, 'lineItems' | 'expenses'>): number {
+  return [...invoice.lineItems, ...invoice.expenses].reduce((sum, li) => sum + li.price, 0)
+}
+
+/** Sent and unpaid after the whole of its due day has passed. */
+export function isOverdue(invoice: Pick<Invoice, 'status' | 'dueDate'>, now = new Date()): boolean {
+  return invoice.status === 'sent' && now > endOfDay(new Date(invoice.dueDate))
 }

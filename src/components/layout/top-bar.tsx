@@ -4,28 +4,25 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { NotificationBell } from '@/components/dashboard/notification-panel'
 import { useTheme } from '@/hooks/use-theme'
+import type { Theme } from '@/types'
 
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/invoices': 'Invoices',
-  '/invoices/new': 'New Invoice',
-  '/clients': 'Clients & Templates',
+  '/invoices/new': 'New invoice',
+  '/clients': 'Clients & templates',
   '/settings': 'Settings',
 }
 
 function getPageTitle(pathname: string): string {
-  // Exact match first
   if (pageTitles[pathname]) return pageTitles[pathname]
-
-  // Check for invoice edit route: /invoices/:id
-  if (/^\/invoices\/[^/]+$/.test(pathname) && pathname !== '/invoices/new') {
-    return 'Edit Invoice'
-  }
-
+  if (/^\/invoices\/[^/]+$/.test(pathname)) return 'Edit invoice'
   return 'Invoicer'
 }
 
@@ -37,12 +34,9 @@ export function TopBar({ onMenuClick }: TopBarProps) {
   const location = useLocation()
   const { theme, setTheme } = useTheme()
 
-  const title = getPageTitle(location.pathname)
-
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background/80 px-4 md:px-6 backdrop-blur-sm">
+    <header className="flex h-12 shrink-0 items-center justify-between gap-2 px-3 md:px-5">
       <div className="flex items-center gap-2">
-        {/* Hamburger menu for mobile */}
         <Button
           variant="ghost"
           size="icon-sm"
@@ -52,36 +46,42 @@ export function TopBar({ onMenuClick }: TopBarProps) {
         >
           <Menu className="size-5" />
         </Button>
-        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+        {/* Pages carry their own heading on wider screens */}
+        <h1 className="text-base font-semibold tracking-tight md:sr-only">
+          {getPageTitle(location.pathname)}
+        </h1>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
+        <NotificationBell />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm">
+            <Button variant="ghost" size="icon-sm" className="text-muted-foreground">
               {theme === 'dark' ? (
-                <Moon className="size-4" />
+                <Moon key="dark" className="size-4 animate-pop" />
               ) : theme === 'light' ? (
-                <Sun className="size-4" />
+                <Sun key="light" className="size-4 animate-pop" />
               ) : (
-                <Monitor className="size-4" />
+                <Monitor key="system" className="size-4 animate-pop" />
               )}
-              <span className="sr-only">Toggle theme</span>
+              <span className="sr-only">Theme</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setTheme('light')}>
-              <Sun className="mr-2 size-4" />
-              Light
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme('dark')}>
-              <Moon className="mr-2 size-4" />
-              Dark
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme('system')}>
-              <Monitor className="mr-2 size-4" />
-              System
-            </DropdownMenuItem>
+          <DropdownMenuContent align="end" className="w-36">
+            <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setTheme(v as Theme)}>
+              <DropdownMenuRadioItem value="light">
+                <Sun className="size-4" />
+                Light
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="dark">
+                <Moon className="size-4" />
+                Dark
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="system">
+                <Monitor className="size-4" />
+                System
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

@@ -1,15 +1,13 @@
-import { useEffect, useState, useCallback } from 'react'
-import { differenceInDays, isToday, isTomorrow } from 'date-fns'
-import {
-  invoiceService,
-  scheduleService,
-  settingsService,
-  clientService,
-  templateService,
-} from '@/db'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { differenceInCalendarDays, format, isToday, isTomorrow } from 'date-fns'
+import { db } from '@/db'
+import { scheduleService, settingsService } from '@/db'
+import { isOverdue } from '@/lib/invoice-amounts'
 import { nativeNotify } from '@/lib/native/notify'
 
 export interface Notification {
+  /** Stable for one occurrence: a schedule's next cycle gets a new id. */
   id: string
   type: 'schedule-due' | 'overdue' | 'backup-reminder'
   message: string
@@ -22,161 +20,136 @@ export interface Notification {
 const DISMISSED_KEY = 'invoicer-dismissed-notifications'
 const FIRED_KEY = 'invoicer-fired-notifications'
 
-function getDismissedIds(): Set<string> {
+function readSet(storage: Storage, key: string): Set<string> {
   try {
-    const stored = sessionStorage.getItem(DISMISSED_KEY)
-    if (stored) {
-      return new Set(JSON.parse(stored) as string[])
-    }
+    const stored = storage.getItem(key)
+    if (stored) return new Set(JSON.parse(stored) as string[])
   } catch {
-    // ignore parse errors
+    // unreadable storage: start empty
   }
   return new Set()
 }
 
-function saveDismissedIds(ids: Set<string>) {
-  sessionStorage.setItem(DISMISSED_KEY, JSON.stringify(Array.from(ids)))
+function writeSet(storage: Storage, key: string, ids: Set<string>) {
+  try {
+    storage.setItem(key, JSON.stringify(Array.from(ids)))
+  } catch {
+    // storage full or blocked: notifications still show in the app
+  }
 }
 
-function getFiredIds(): Set<string> {
-  try {
-    const stored = localStorage.getItem(FIRED_KEY)
-    if (stored) {
-      return new Set(JSON.parse(stored) as string[])
+const plural = (n: number, word: string) => `${n} ${word}${n !== 1 ? 's' : ''}`
+
+async function computeNotifications(): Promise<Notification[]> {
+  const result: Notification[] = []
+  const now = new Date()
+
+  const [dueSoon, clients, templates, sent, settings] = await Promise.all([
+    scheduleService.getDueSoon(3),
+    db.clients.toArray(),
+    db.templates.toArray(),
+    db.invoices.where('status').equals('sent').toArray(),
+    settingsService.get(),
+  ])
+
+  for (const schedule of dueSoon) {
+    const client = clients.find((c) => c.id === schedule.clientId)
+    const template = templates.find((t) => t.id === schedule.templateId)
+    if (!client || !template) continue
+    const dueDate = new Date(schedule.nextDueDate)
+    const days = differenceInCalendarDays(dueDate, now)
+    const when = isToday(dueDate)
+      ? 'is due today'
+      : isTomorrow(dueDate)
+        ? 'is due tomorrow'
+        : days < 0
+          ? `was due ${plural(-days, 'day')} ago`
+          : `is due in ${plural(days, 'day')}`
+    result.push({
+      id: `schedule-${schedule.id}-${format(dueDate, 'yyyy-MM-dd')}`,
+      type: 'schedule-due',
+      message: `${client.name}: ${template.name} ${when}`,
+      actionLabel: 'Create invoice',
+      actionUrl: `/invoices/new?template=${template.id}&client=${client.id}&schedule=${schedule.id}`,
+      scheduleId: schedule.id,
+    })
+  }
+
+  for (const invoice of sent.filter((inv) => isOverdue(inv, now))) {
+    const days = Math.max(1, differenceInCalendarDays(now, new Date(invoice.dueDate)))
+    result.push({
+      id: `overdue-${invoice.id}`,
+      type: 'overdue',
+      message: `${invoice.invoiceNumber || 'An invoice'} to ${invoice.to.name || 'a client'} is ${plural(days, 'day')} overdue`,
+      actionLabel: 'Open',
+      actionUrl: `/invoices/${invoice.id}`,
+      invoiceId: invoice.id,
+    })
+  }
+
+  if (settings.backupReminderDays > 0) {
+    const lastBackup = settings.lastBackupDate ? new Date(settings.lastBackupDate) : null
+    const daysSince = lastBackup ? differenceInCalendarDays(now, lastBackup) : Infinity
+    if (daysSince > settings.backupReminderDays) {
+      result.push({
+        id: `backup-reminder-${lastBackup ? format(lastBackup, 'yyyy-MM-dd') : 'never'}`,
+        type: 'backup-reminder',
+        message: lastBackup
+          ? `Your last backup was ${plural(daysSince, 'day')} ago`
+          : 'Your data has not been backed up yet',
+        actionLabel: 'Back up',
+        actionUrl: '/settings?tab=data',
+      })
     }
-  } catch {
-    // ignore parse errors
   }
-  return new Set()
+
+  return result
 }
 
-function saveFiredIds(ids: Set<string>) {
-  try {
-    localStorage.setItem(FIRED_KEY, JSON.stringify(Array.from(ids)))
-  } catch {
-    // ignore quota errors
-  }
+interface NotificationsValue {
+  notifications: Notification[]
+  dismiss: (id: string) => void
 }
 
-export function useNotifications() {
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => getDismissedIds())
+const NotificationsContext = createContext<NotificationsValue>({
+  notifications: [],
+  dismiss: () => {},
+})
+
+/** Keeps notifications current as data changes, and raises each one natively once. */
+export function NotificationsProvider({ children }: { children: ReactNode }) {
+  const all = useLiveQuery(computeNotifications)
+  const [dismissedIds, setDismissedIds] = useState(() => readSet(sessionStorage, DISMISSED_KEY))
 
   useEffect(() => {
-    async function compute() {
-      const result: Notification[] = []
-
-      // Scheduled invoices due soon
-      try {
-        const dueSoon = await scheduleService.getDueSoon(3)
-        for (const schedule of dueSoon) {
-          const [client, template] = await Promise.all([
-            clientService.getById(schedule.clientId),
-            templateService.getById(schedule.templateId),
-          ])
-          if (!client || !template) continue
-
-          const dueDate = new Date(schedule.nextDueDate)
-          let when: string
-          if (isToday(dueDate)) {
-            when = 'today'
-          } else if (isTomorrow(dueDate)) {
-            when = 'tomorrow'
-          } else {
-            const days = differenceInDays(dueDate, new Date())
-            when = `in ${days} day${days !== 1 ? 's' : ''}`
-          }
-
-          result.push({
-            id: `schedule-${schedule.id}`,
-            type: 'schedule-due',
-            message: `${client.name} ${template.name} invoice is due ${when}`,
-            actionLabel: 'Create Invoice',
-            actionUrl: `/invoices/new?template=${template.id}&client=${client.id}`,
-            scheduleId: schedule.id,
-          })
-        }
-      } catch {
-        // silently ignore schedule errors
-      }
-
-      // Overdue invoices
-      try {
-        const overdue = await invoiceService.getOverdue()
-        for (const invoice of overdue) {
-          const days = differenceInDays(new Date(), new Date(invoice.dueDate))
-          result.push({
-            id: `overdue-${invoice.id}`,
-            type: 'overdue',
-            message: `Invoice ${invoice.invoiceNumber} is ${days} day${days !== 1 ? 's' : ''} overdue`,
-            actionLabel: 'View Invoice',
-            actionUrl: `/invoices/${invoice.id}`,
-            invoiceId: invoice.id,
-          })
-        }
-      } catch {
-        // silently ignore overdue errors
-      }
-
-      // Backup reminder
-      try {
-        const settings = await settingsService.get()
-        if (settings.backupReminderDays > 0) {
-          const lastBackup = settings.lastBackupDate
-            ? new Date(settings.lastBackupDate)
-            : null
-          const daysSinceBackup = lastBackup
-            ? differenceInDays(new Date(), lastBackup)
-            : Infinity
-
-          if (daysSinceBackup > settings.backupReminderDays) {
-            const message = lastBackup
-              ? `It's been ${daysSinceBackup} days since your last data backup`
-              : `You haven't backed up your data yet`
-            result.push({
-              id: 'backup-reminder',
-              type: 'backup-reminder',
-              message,
-              actionLabel: 'Export Now',
-              actionUrl: '/settings',
-            })
-          }
-        }
-      } catch {
-        // silently ignore settings errors
-      }
-
-      setNotifications(result)
-
-      // Fire system notifications for any new (never-seen, non-dismissed) entries.
-      // No-op on web; native popup on Tauri.
-      const fired = getFiredIds()
-      const initialDismissed = getDismissedIds()
-      const fresh = result.filter(
-        (n) => !fired.has(n.id) && !initialDismissed.has(n.id),
-      )
-      if (fresh.length > 0) {
-        for (const n of fresh) {
-          void nativeNotify('Invoicer', n.message)
-          fired.add(n.id)
-        }
-        saveFiredIds(fired)
-      }
+    if (!all) return
+    const fired = readSet(localStorage, FIRED_KEY)
+    const fresh = all.filter((n) => !fired.has(n.id) && !dismissedIds.has(n.id))
+    if (fresh.length === 0) return
+    for (const n of fresh) {
+      void nativeNotify('Invoicer', n.message)
+      fired.add(n.id)
     }
-
-    compute()
-  }, [])
+    writeSet(localStorage, FIRED_KEY, fired)
+  }, [all, dismissedIds])
 
   const dismiss = useCallback((id: string) => {
     setDismissedIds((prev) => {
-      const next = new Set(prev)
-      next.add(id)
-      saveDismissedIds(next)
+      const next = new Set(prev).add(id)
+      writeSet(sessionStorage, DISMISSED_KEY, next)
       return next
     })
   }, [])
 
-  const visibleNotifications = notifications.filter((n) => !dismissedIds.has(n.id))
+  const value = useMemo(
+    () => ({ notifications: (all ?? []).filter((n) => !dismissedIds.has(n.id)), dismiss }),
+    [all, dismissedIds, dismiss],
+  )
 
-  return { notifications: visibleNotifications, dismiss }
+  return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function useNotifications(): NotificationsValue {
+  return useContext(NotificationsContext)
 }

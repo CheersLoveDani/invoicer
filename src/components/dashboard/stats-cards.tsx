@@ -1,104 +1,71 @@
-import { useEffect, useState } from 'react'
-import { Banknote, AlertTriangle, CheckCircle, TrendingUp } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { invoiceService, profileService } from '@/db'
-import { CURRENCY_SYMBOLS, type Currency } from '@/types'
+import { formatCurrency } from '@/lib/pdf-utils'
+import { AnimatedNumber } from '@/components/ui/animated-number'
+import { cn } from '@/lib/utils'
 
-interface Stats {
-  outstanding: number
-  overdue: number
-  paidThisMonth: number
-  earnedThisYear: number
-}
-
-function formatAmount(amount: number, currency: Currency): string {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? currency
-  return `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
+const plural = (n: number) => `${n} invoice${n !== 1 ? 's' : ''}`
 
 export function StatsCards() {
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [currency, setCurrency] = useState<Currency>('GBP')
+  const data = useLiveQuery(async () => {
+    const { defaultCurrency } = await profileService.get()
+    return { currency: defaultCurrency, stats: await invoiceService.getStats(defaultCurrency) }
+  })
 
-  useEffect(() => {
-    async function load() {
-      const [statsData, profile] = await Promise.all([
-        invoiceService.getStats(),
-        profileService.get(),
-      ])
-      setStats(statsData)
-      setCurrency(profile.defaultCurrency)
-    }
-    load()
-  }, [])
-
-  if (!stats) {
-    return (
-      <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i}>
-            <CardContent className="pt-6">
-              <div className="h-16 animate-pulse rounded bg-muted" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    )
+  if (!data) {
+    return <div className="h-40 skeleton rounded-2xl" />
   }
 
-  const cards = [
+  const { currency, stats } = data
+  const money = (n: number) => formatCurrency(n, currency)
+
+  const secondary = [
     {
-      title: 'Outstanding',
-      amount: stats.outstanding,
-      icon: Banknote,
-      iconClassName: 'text-blue-600 dark:text-blue-400',
-      bgClassName: 'bg-blue-100 dark:bg-blue-900/40',
+      label: 'Overdue',
+      value: stats.overdue,
+      note: stats.overdueCount ? plural(stats.overdueCount) : 'Nothing late',
+      tone: stats.overdueCount ? 'text-warning' : '',
     },
-    {
-      title: 'Overdue',
-      amount: stats.overdue,
-      icon: AlertTriangle,
-      iconClassName: 'text-red-600 dark:text-red-400',
-      bgClassName: 'bg-red-100 dark:bg-red-900/40',
-    },
-    {
-      title: 'Paid This Month',
-      amount: stats.paidThisMonth,
-      icon: CheckCircle,
-      iconClassName: 'text-green-600 dark:text-green-400',
-      bgClassName: 'bg-green-100 dark:bg-green-900/40',
-    },
-    {
-      title: 'Earned This Year',
-      amount: stats.earnedThisYear,
-      icon: TrendingUp,
-      iconClassName: 'text-purple-600 dark:text-purple-400',
-      bgClassName: 'bg-purple-100 dark:bg-purple-900/40',
-    },
+    { label: 'Paid this month', value: stats.paidThisMonth, note: null, tone: '' },
+    { label: 'Earned this year', value: stats.earnedThisYear, note: null, tone: '' },
   ]
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
-      {cards.map((card) => {
-        const Icon = card.icon
-        return (
-          <Card key={card.title}>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${card.bgClassName}`}>
-                  <Icon className={`h-5 w-5 ${card.iconClassName}`} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm text-muted-foreground">{card.title}</p>
-                  <p className="truncate text-xl font-bold tracking-tight">
-                    {formatAmount(card.amount, currency)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )
-      })}
-    </div>
+    <section className="grid overflow-hidden rounded-2xl border bg-card shadow-card lg:grid-cols-[1.35fr_repeat(3,1fr)]">
+      {/* The figure that matters most: what clients still owe */}
+      <div className="relative overflow-hidden bg-primary p-6 text-primary-foreground">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-16 -right-10 size-56 rounded-full border-[28px] border-white/[0.06]"
+        />
+        <p className="text-sm font-medium text-primary-foreground/75">Waiting to be paid</p>
+        <AnimatedNumber
+          value={stats.outstanding}
+          format={money}
+          className="mt-2 block text-4xl leading-none font-semibold tracking-[-0.03em] tabular md:text-[2.75rem]"
+        />
+        <p className="mt-3 text-sm text-primary-foreground/75">
+          {stats.outstandingCount ? `Across ${plural(stats.outstandingCount)}` : 'Every sent invoice is paid'}
+        </p>
+      </div>
+      {secondary.map((item) => (
+        <div key={item.label} className="flex flex-col justify-between gap-3 border-t p-5 lg:border-t-0 lg:border-l">
+          <p className="text-sm text-muted-foreground">{item.label}</p>
+          <div>
+            <AnimatedNumber
+              value={item.value}
+              format={money}
+              className={cn('block text-2xl font-semibold tracking-[-0.02em] tabular', item.tone)}
+            />
+            {item.note && <p className="mt-1 text-xs text-muted-foreground">{item.note}</p>}
+          </div>
+        </div>
+      ))}
+      {stats.otherCurrencyCount > 0 && (
+        <p className="border-t px-5 py-2 text-xs text-muted-foreground lg:col-span-4">
+          Totals are in {currency}. {plural(stats.otherCurrencyCount)} in other currencies are left out.
+        </p>
+      )}
+    </section>
   )
 }

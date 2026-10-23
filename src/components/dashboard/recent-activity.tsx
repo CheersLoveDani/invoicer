@@ -1,74 +1,58 @@
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { format } from 'date-fns'
-import { FileText } from 'lucide-react'
 import { invoiceService } from '@/db'
-import { CURRENCY_SYMBOLS, type Currency } from '@/types'
+import { formatCurrency } from '@/lib/pdf-utils'
+import { invoiceTotal } from '@/lib/invoice-amounts'
 import { InvoiceStatusBadge } from '@/components/invoices/invoice-status-badge'
-
-function formatAmount(amount: number, currency: Currency): string {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? currency
-  return `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function getInvoiceTotal(invoice: { lineItems: { price: number }[]; expenses: { price: number }[] }): number {
-  const lineItemsTotal = invoice.lineItems.reduce((sum, item) => sum + item.price, 0)
-  const expensesTotal = invoice.expenses.reduce((sum, item) => sum + item.price, 0)
-  return lineItemsTotal + expensesTotal
-}
+import { Button } from '@/components/ui/button'
 
 export function RecentActivity() {
   const navigate = useNavigate()
-  const invoices = useLiveQuery(() => invoiceService.getRecent(20)) ?? []
+  const invoices = useLiveQuery(() => invoiceService.getRecent(8))
 
-  if (invoices.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-center">
-        <FileText className="mb-3 h-10 w-10 text-muted-foreground/60" />
-        <p className="text-sm font-medium text-muted-foreground">
-          No invoices yet
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground/80">
-          Create your first invoice to see activity here.
-        </p>
-      </div>
-    )
-  }
+  if (invoices === undefined) return <div className="h-64 skeleton rounded-xl" />
 
   return (
-    <div className="space-y-1">
-      {invoices.map((invoice) => {
-        const total = getInvoiceTotal(invoice)
-        return (
-          <div
-            key={invoice.id}
-            className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-muted/60"
-            onClick={() => navigate(`/invoices/${invoice.id}`)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                navigate(`/invoices/${invoice.id}`)
-              }
-            }}
-          >
-            <InvoiceStatusBadge status={invoice.status} dueDate={invoice.dueDate} />
-            <span className="min-w-0 shrink-0 text-sm font-medium">
-              {invoice.invoiceNumber}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-              {invoice.to.name}
-            </span>
-            <span className="shrink-0 text-sm font-mono">
-              {formatAmount(total, invoice.currency)}
-            </span>
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {format(new Date(invoice.date), 'dd MMM yyyy')}
-            </span>
-          </div>
-        )
-      })}
-    </div>
+    <section className="rounded-xl border bg-card p-3 shadow-card">
+      <div className="flex items-center justify-between px-2 pt-1 pb-2">
+        <h3 className="text-sm font-semibold">Recent invoices</h3>
+        <Button variant="link" size="xs" asChild className="text-muted-foreground">
+          <Link to="/invoices">See all</Link>
+        </Button>
+      </div>
+      {invoices.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+          <p className="text-sm text-muted-foreground">Invoices you create show up here.</p>
+          <Button size="sm" asChild>
+            <Link to="/invoices/new">Create an invoice</Link>
+          </Button>
+        </div>
+      ) : (
+        <ul className="space-y-0.5">
+          {invoices.map((invoice, i) => (
+            <li key={invoice.id}>
+              <button
+                type="button"
+                onClick={() => navigate(`/invoices/${invoice.id}`)}
+                className="flex w-full animate-rise cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none"
+                style={{ '--i': i } as React.CSSProperties}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{invoice.to.name || 'No client'}</p>
+                  <p className="text-xs text-muted-foreground tabular">
+                    {invoice.invoiceNumber || 'No number'}, {format(new Date(invoice.date), 'd MMM')}
+                  </p>
+                </div>
+                <InvoiceStatusBadge status={invoice.status} dueDate={invoice.dueDate} />
+                <span className="w-24 shrink-0 text-right text-sm font-medium tabular">
+                  {formatCurrency(invoiceTotal(invoice), invoice.currency)}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }

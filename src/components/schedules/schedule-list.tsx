@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { format, differenceInDays } from 'date-fns'
+import { format, differenceInCalendarDays } from 'date-fns'
 import { toast } from 'sonner'
 import { db, scheduleService } from '@/db'
 import type { Schedule } from '@/types'
@@ -48,7 +49,8 @@ function FrequencyLabel({ schedule }: { schedule: Schedule }) {
   }
 }
 
-function ScheduleCard({ schedule }: { schedule: Schedule }) {
+function ScheduleCard({ schedule, index }: { schedule: Schedule; index: number }) {
+  const navigate = useNavigate()
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -64,7 +66,7 @@ function ScheduleCard({ schedule }: { schedule: Schedule }) {
   )
 
   const dueDate = new Date(schedule.nextDueDate)
-  const daysUntilDue = differenceInDays(dueDate, new Date())
+  const daysUntilDue = differenceInCalendarDays(dueDate, new Date())
   const isDueSoon = schedule.active && daysUntilDue <= 7 && daysUntilDue >= 0
   const isOverdue = schedule.active && daysUntilDue < 0
 
@@ -73,7 +75,7 @@ function ScheduleCard({ schedule }: { schedule: Schedule }) {
       await scheduleService.update(schedule.id, { active: !schedule.active })
       toast.success(schedule.active ? 'Schedule paused' : 'Schedule resumed')
     } catch {
-      toast.error('Failed to update schedule')
+      toast.error('The schedule was not changed. Try again.')
     }
   }
 
@@ -84,7 +86,7 @@ function ScheduleCard({ schedule }: { schedule: Schedule }) {
       toast.success('Schedule deleted')
       setDeleteOpen(false)
     } catch {
-      toast.error('Failed to delete schedule')
+      toast.error('The schedule was not deleted. Try again.')
     } finally {
       setDeleting(false)
     }
@@ -92,37 +94,31 @@ function ScheduleCard({ schedule }: { schedule: Schedule }) {
 
   return (
     <>
-      <Card className="transition-shadow hover:shadow-md">
+<Card style={{ '--i': index } as React.CSSProperties} className="animate-rise transition-[box-shadow,transform,border-color] duration-200 ease-out-soft hover:-translate-y-0.5 hover:border-foreground/15 hover:shadow-lift">
         <CardHeader>
           <div className="min-w-0 flex-1">
             <CardTitle className="flex items-center gap-2 truncate text-base">
-              {client?.name ?? 'Unknown Client'}
+              {client?.name ?? 'Client removed'}
               {!schedule.active && (
-                <Badge variant="secondary" className="text-[10px]">
-                  Paused
-                </Badge>
+                <Badge variant="secondary">Paused</Badge>
               )}
               {schedule.active && (
                 <Badge
                   className={
                     isOverdue
-                      ? 'bg-destructive text-white text-[10px]'
+                      ? 'bg-warning/12 text-warning'
                       : isDueSoon
-                        ? 'bg-amber-500 text-white text-[10px]'
-                        : 'bg-emerald-500 text-white text-[10px]'
+                        ? 'bg-info/10 text-info'
+                        : 'bg-success/10 text-success'
                   }
                 >
-                  {isOverdue
-                    ? 'Overdue'
-                    : isDueSoon
-                      ? 'Due Soon'
-                      : 'Active'}
+                  {isOverdue ? 'Late' : isDueSoon ? 'Due soon' : 'Active'}
                 </Badge>
               )}
             </CardTitle>
             <CardDescription className="mt-1 flex items-center gap-1.5 truncate">
               <FileText className="size-3.5 shrink-0" />
-              {template?.name ?? 'Unknown Template'}
+              {template?.name ?? 'Template removed'}
             </CardDescription>
           </div>
           <CardAction>
@@ -176,9 +172,22 @@ function ScheduleCard({ schedule }: { schedule: Schedule }) {
               <span><FrequencyLabel schedule={schedule} /></span>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <CalendarClock className="size-3.5" />
-            <span>Next due: {format(dueDate, 'PPP')}</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <CalendarClock className="size-3.5" />
+              <span className="tabular">Next {format(dueDate, 'EEE d MMM yyyy')}</span>
+            </div>
+            {schedule.active && client && template && (
+              <Button
+                size="xs"
+                variant={isOverdue || isDueSoon ? 'default' : 'outline'}
+                onClick={() =>
+                  navigate(`/invoices/new?template=${schedule.templateId}&client=${schedule.clientId}&schedule=${schedule.id}`)
+                }
+              >
+                Create invoice
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -192,13 +201,10 @@ function ScheduleCard({ schedule }: { schedule: Schedule }) {
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete Schedule</DialogTitle>
+            <DialogTitle>Delete this schedule?</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this schedule for{' '}
-              <span className="font-semibold text-foreground">
-                {client?.name ?? 'this client'}
-              </span>
-              ? This action cannot be undone.
+              Invoices already made from it stay. Reminders for{' '}
+              <span className="font-semibold text-foreground">{client?.name ?? 'this client'}</span> stop.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -214,7 +220,7 @@ function ScheduleCard({ schedule }: { schedule: Schedule }) {
               onClick={handleDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting...' : 'Delete'}
+              {deleting ? 'Deleting…' : 'Delete schedule'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -233,30 +239,32 @@ export function ScheduleList() {
       <div className="flex items-center justify-end">
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="size-4" />
-          Add Schedule
+          New schedule
         </Button>
       </div>
 
       {schedules === undefined ? (
-        <div className="py-12 text-center text-muted-foreground">
-          Loading schedules...
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-36 skeleton rounded-xl" />
+          ))}
         </div>
       ) : schedules.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16">
           <CalendarClock className="mb-4 size-12 text-muted-foreground/50" />
-          <h3 className="text-lg font-medium">No schedules yet</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Create a recurring schedule to automate your invoicing.
+          <h3 className="text-[15px] font-semibold">No schedules yet</h3>
+          <p className="mt-1 max-w-sm text-center text-sm text-muted-foreground">
+            A schedule reminds you when a repeat invoice is due and fills it in from a template.
           </p>
           <Button className="mt-4" onClick={() => setCreateOpen(true)}>
             <Plus className="size-4" />
-            Add Your First Schedule
+            Set up a schedule
           </Button>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {schedules.map((schedule) => (
-            <ScheduleCard key={schedule.id} schedule={schedule} />
+          {schedules.map((schedule, i) => (
+            <ScheduleCard key={schedule.id} schedule={schedule} index={i} />
           ))}
         </div>
       )}

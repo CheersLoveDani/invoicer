@@ -46,19 +46,30 @@ export function ClientPicker({ value, onChange }: ClientPickerProps) {
           aria-expanded={open}
           className="w-full justify-between"
         >
-          {value ? value.name : 'Select a client...'}
+          {value ? (
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate">{value.name}</span>
+              {value.invoicePrefix && (
+                <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                  {value.invoicePrefix}
+                </span>
+              )}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">Choose a client</span>
+          )}
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search clients..."
+            placeholder="Search clients"
             value={search}
             onValueChange={setSearch}
           />
           <CommandList>
-            <CommandEmpty>No clients found.</CommandEmpty>
+            <CommandEmpty>No client matches. Add clients on the Clients page.</CommandEmpty>
             <CommandGroup>
               {filtered.map((client) => (
                 <CommandItem
@@ -92,13 +103,13 @@ export function ClientPicker({ value, onChange }: ClientPickerProps) {
               {value && (
                 <CommandItem
                   onSelect={() => {
-                    onChange(undefined as unknown as Client)
+                    onChange(null)
                     setOpen(false)
                     setSearch('')
                   }}
                 >
                   <X className="mr-2 size-4" />
-                  Clear selection
+                  Clear client
                 </CommandItem>
               )}
               <CommandItem
@@ -109,7 +120,7 @@ export function ClientPicker({ value, onChange }: ClientPickerProps) {
                 }}
               >
                 <PenLine className="mr-2 size-4" />
-                Enter manually
+                Type the details instead
               </CommandItem>
             </CommandGroup>
           </CommandList>

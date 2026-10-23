@@ -43,10 +43,10 @@ export function DataManagement() {
     try {
       const saved = await exportAllData()
       if (saved) {
-        toast.success('Data exported successfully')
+        toast.success('Backup saved')
       }
     } catch {
-      toast.error('Failed to export data')
+      toast.error('The backup was not saved. Try again.')
     } finally {
       setExporting(false)
     }
@@ -71,7 +71,7 @@ export function DataManagement() {
       toast.error(
         err instanceof Error
           ? err.message
-          : 'Failed to parse backup file. Please ensure it is valid JSON.'
+          : 'That file is not an Invoicer backup.'
       )
     }
   }
@@ -82,12 +82,12 @@ export function DataManagement() {
     setImporting(true)
     try {
       await importAllData(importData)
-      toast.success('Data imported successfully')
+      toast.success('Backup restored')
       setShowConfirm(false)
       setImportData(null)
       setImportCounts(null)
     } catch {
-      toast.error('Failed to import data')
+      toast.error('The backup could not be restored. Your data is unchanged.')
     } finally {
       setImporting(false)
     }
@@ -105,7 +105,7 @@ export function DataManagement() {
       const allInvoices = await db.invoices.toArray()
 
       if (allInvoices.length === 0) {
-        toast.info('No invoices to export')
+        toast.info('There are no invoices to save yet')
         return
       }
 
@@ -123,7 +123,7 @@ export function DataManagement() {
       }
     } catch (err) {
       console.error('Bulk PDF export failed:', err)
-      toast.error('Failed to export invoices as PDFs')
+      toast.error('The PDFs could not be made. Try again.')
     } finally {
       setBulkPdfExporting(false)
     }
@@ -134,7 +134,7 @@ export function DataManagement() {
       {/* Export Section */}
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium">Export Data</h3>
+          <h3 className="text-[15px] font-semibold">Back up</h3>
           <p className="text-sm text-muted-foreground">
             Download all your data as a JSON backup file.
           </p>
@@ -164,7 +164,7 @@ export function DataManagement() {
       {/* Import Section */}
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium">Import Data</h3>
+          <h3 className="text-[15px] font-semibold">Restore a backup</h3>
           <p className="text-sm text-muted-foreground">
             Restore data from a previously exported backup file. This will
             replace all existing data.
@@ -194,7 +194,7 @@ export function DataManagement() {
       {/* PDF Export Section */}
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium">Bulk PDF Export</h3>
+          <h3 className="text-[15px] font-semibold">Every invoice as PDF</h3>
           <p className="text-sm text-muted-foreground">
             Export all invoices as individual PDF files bundled in a ZIP archive.
           </p>

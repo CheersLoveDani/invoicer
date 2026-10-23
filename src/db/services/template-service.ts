@@ -36,7 +36,11 @@ export const templateService = {
     await db.templates.update(id, { ...data, updatedAt: new Date() })
   },
 
+  /** Removes the template and the schedules that use it. */
   async delete(id: string): Promise<void> {
-    await db.templates.delete(id)
+    await db.transaction('rw', db.templates, db.schedules, async () => {
+      await db.schedules.where('templateId').equals(id).delete()
+      await db.templates.delete(id)
+    })
   },
 }

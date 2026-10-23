@@ -1,26 +1,37 @@
-import { useState, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
-import { Eye, EyeOff } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { useBlocker, useParams } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { pdf } from '@react-pdf/renderer'
-import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { useInvoiceForm } from '@/hooks/use-invoice-form'
-import { invoiceService, clientService } from '@/db'
+import { invoiceService, clientService, profileService } from '@/db'
 import { generateEmailContent, type EmailContent } from '@/lib/email-utils'
+import { invoicePdfFilename, invoicePdfProps } from '@/lib/invoice-pdf'
 import { InvoiceForm } from '@/components/invoice/invoice-form'
 import { InvoiceActions } from '@/components/invoice/invoice-actions'
 import { PdfDragCard } from '@/components/invoice/pdf-drag-card'
 import { SendInvoiceDialog } from '@/components/invoice/send-invoice-dialog'
+import { InvoiceStatusBadge } from '@/components/invoices/invoice-status-badge'
 import { PdfPreview } from '@/components/pdf/pdf-preview'
 import { InvoicePdfDocument } from '@/components/pdf/pdf-document'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { saveBlob } from '@/lib/native/save-file'
+import { cn } from '@/lib/utils'
 
 export default function InvoiceEditorPage() {
   const { id } = useParams()
   const invoiceForm = useInvoiceForm()
-  const { form, save, isLoading, mode } = invoiceForm
+  const { form, save, markSent, isLoading, mode, isDirty, hasUnsavedChanges } = invoiceForm
+  const logo = useLiveQuery(async () => (await profileService.get()).logo)
 
   const [showPreview, setShowPreview] = useState(false)
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null)
@@ -31,65 +42,72 @@ export default function InvoiceEditorPage() {
 
   const isNew = mode !== 'edit'
 
+  // The page stays mounted between invoices; a PDF made for one must not be offered for the next.
+  // A just-created invoice (new -> its own id) keeps its card.
+  useEffect(() => {
+    if (id && id === savedInvoiceId) return
+    setPdfBlob(null)
+    setEmailContent(null)
+    setSavedInvoiceId(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
+  // Ask before leaving with unsaved edits, inside the app and when closing the window
+  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
+    hasUnsavedChanges() && currentLocation.pathname !== nextLocation.pathname,
+  )
+  useEffect(() => {
+    if (!isDirty) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isDirty])
+
+  const handleSave = useCallback(async () => {
+    try {
+      await save()
+    } catch (err) {
+      console.error('Failed to save invoice:', err)
+      toast.error('The invoice was not saved. Try again.')
+    }
+  }, [save])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        void handleSave()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [handleSave])
+
+  const renderPdf = useCallback(
+    () => pdf(<InvoicePdfDocument {...invoicePdfProps(form, logo)} />).toBlob(),
+    [form, logo],
+  )
+
   const handleDownloadPdf = useCallback(async () => {
     try {
-      const blob = await pdf(
-        <InvoicePdfDocument
-          template={form.pdfTemplate}
-          title={form.title}
-          invoiceNumber={form.invoiceNumber}
-          date={form.date}
-          from={form.from}
-          to={{ name: form.to.name, email: form.to.email, address: form.to.address }}
-          lineItems={form.lineItems}
-          expenses={form.expenses}
-          notes={form.notes}
-          paymentDetails={form.paymentDetails}
-          currency={form.currency}
-        />,
-      ).toBlob()
-      const saved = await saveBlob(blob, {
-        suggestedName: `Invoice-${form.invoiceNumber || 'draft'}-${format(form.date, 'yyyy-MM-dd')}.pdf`,
+      const saved = await saveBlob(await renderPdf(), {
+        suggestedName: invoicePdfFilename(form),
         filters: [{ name: 'PDF', extensions: ['pdf'] }],
       })
-      if (saved) {
-        toast.success('PDF downloaded')
-      }
+      if (saved) toast.success('PDF saved')
     } catch (err) {
       console.error('Failed to generate PDF:', err)
-      toast.error('Failed to generate PDF')
+      toast.error('The PDF could not be made. Try again.')
     }
-  }, [form])
+  }, [form, renderPdf])
 
   const handleSendInvoice = useCallback(async () => {
     try {
-      // 1. Save the invoice (ensures it exists in DB and we get an ID)
       const invoiceId = await save()
       setSavedInvoiceId(invoiceId)
+      setPdfBlob(await renderPdf())
+      setPdfFilename(invoicePdfFilename(form))
 
-      // 2. Generate the PDF blob
-      const blob = await pdf(
-        <InvoicePdfDocument
-          template={form.pdfTemplate}
-          title={form.title}
-          invoiceNumber={form.invoiceNumber}
-          date={form.date}
-          from={form.from}
-          to={{ name: form.to.name, email: form.to.email, address: form.to.address }}
-          lineItems={form.lineItems}
-          expenses={form.expenses}
-          notes={form.notes}
-          paymentDetails={form.paymentDetails}
-          currency={form.currency}
-        />,
-      ).toBlob()
-
-      // 3. Store the blob for the drag card
-      const filename = `Invoice-${form.invoiceNumber || 'draft'}-${format(form.date, 'yyyy-MM-dd')}.pdf`
-      setPdfBlob(blob)
-      setPdfFilename(filename)
-
-      // 4. Look up client email template (if a client is selected)
       let clientTemplate: { emailSubject?: string; emailBody?: string } | undefined
       if (invoiceForm.selectedClient) {
         const client = await clientService.getById(invoiceForm.selectedClient.id)
@@ -98,124 +116,94 @@ export default function InvoiceEditorPage() {
         }
       }
 
-      // 5. Generate email content and show dialog
-      const email = generateEmailContent(
-        {
-          invoiceNumber: form.invoiceNumber,
-          title: form.title,
-          to: { name: form.to.name, email: form.to.email },
-          lineItems: form.lineItems,
-          expenses: form.expenses,
-          currency: form.currency,
-          notes: form.notes,
-        },
-        form.from.name,
-        clientTemplate,
+      setEmailContent(
+        generateEmailContent(
+          {
+            invoiceNumber: form.invoiceNumber,
+            title: form.title,
+            to: { name: form.to.name, email: form.to.email },
+            lineItems: form.lineItems,
+            expenses: form.expenses,
+            currency: form.currency,
+            notes: form.notes,
+          },
+          form.from.name,
+          clientTemplate,
+        ),
       )
-      setEmailContent(email)
       setSendDialogOpen(true)
     } catch (err) {
-      console.error('Failed to send invoice:', err)
-      toast.error('Failed to send invoice')
+      console.error('Failed to prepare invoice email:', err)
+      toast.error('The invoice could not be prepared for sending. Try again.')
     }
-  }, [form, save, invoiceForm.selectedClient])
+  }, [form, save, renderPdf, invoiceForm.selectedClient])
 
   const handleConfirmSend = useCallback(async () => {
     if (!savedInvoiceId) return
     try {
       await invoiceService.markSent(savedInvoiceId)
-      toast.success('Invoice marked as sent')
+      markSent()
+      toast.success(`${form.invoiceNumber || 'Invoice'} marked as sent`)
       setSendDialogOpen(false)
     } catch {
-      toast.error('Failed to mark invoice as sent')
+      toast.error('The invoice could not be marked as sent. Try again.')
     }
-  }, [savedInvoiceId])
+  }, [savedInvoiceId, markSent, form.invoiceNumber])
 
-  if (isLoading) {
+  if (isLoading && !savedInvoiceId) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">Loading invoice...</p>
+      <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        Opening invoice
       </div>
     )
   }
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem-2rem)] flex-col md:h-[calc(100dvh-3.5rem-3rem)]">
-      {/* Header */}
-      <div className="shrink-0 border-b px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">
-              {isNew ? 'New Invoice' : 'Edit Invoice'}
-            </h2>
-            {id && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                Editing invoice {form.invoiceNumber || id}
-              </p>
-            )}
-          </div>
-          {/* Mobile preview toggle */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="lg:hidden"
-            onClick={() => setShowPreview((prev) => !prev)}
-          >
-            {showPreview ? (
-              <>
-                <EyeOff className="size-4" />
-                Hide Preview
-              </>
-            ) : (
-              <>
-                <Eye className="size-4" />
-                Preview
-              </>
-            )}
-          </Button>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b px-4 pb-4 md:px-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <h2 className="truncate text-[1.75rem] leading-tight font-semibold tracking-[-0.02em]">
+            {isNew ? 'New invoice' : form.invoiceNumber || 'Untitled invoice'}
+          </h2>
+          {!isNew && <InvoiceStatusBadge status={form.status} dueDate={form.dueDate} />}
+          {isDirty && (
+            <span className="animate-page text-xs text-muted-foreground" aria-live="polite">
+              Unsaved changes
+            </span>
+          )}
         </div>
+        <Button variant="outline" size="sm" className="lg:hidden" onClick={() => setShowPreview((prev) => !prev)}>
+          {showPreview ? <EyeOff /> : <Eye />}
+          {showPreview ? 'Edit' : 'Preview'}
+        </Button>
       </div>
 
-      {/* Two-panel layout */}
       <div className="flex min-h-0 flex-1">
-        {/* Left panel: form (~60%) — hidden on mobile when preview is shown */}
-        <ScrollArea className={`flex-3 border-r ${showPreview ? 'hidden lg:block' : ''}`}>
-          <div className="p-6">
+        <div className={cn('min-w-0 flex-[3] overflow-y-auto', showPreview && 'hidden lg:block')}>
+          <div className="mx-auto max-w-3xl px-4 py-6 md:px-8">
             <InvoiceForm invoiceForm={invoiceForm} />
           </div>
-        </ScrollArea>
+        </div>
 
-        {/* Right panel: PDF preview (~40%) */}
-        <div className={`flex-2 ${showPreview ? 'block' : 'hidden lg:block'}`}>
-          <PdfPreview
-            template={form.pdfTemplate}
-            title={form.title}
-            invoiceNumber={form.invoiceNumber}
-            date={form.date}
-            from={form.from}
-            to={{ name: form.to.name, email: form.to.email, address: form.to.address }}
-            lineItems={form.lineItems}
-            expenses={form.expenses}
-            notes={form.notes}
-            paymentDetails={form.paymentDetails}
-            currency={form.currency}
-          />
+        <div className={cn('min-w-0 flex-[2] border-l bg-muted/40', showPreview ? 'block' : 'hidden lg:block')}>
+          <PdfPreview {...invoicePdfProps(form, logo)} />
         </div>
       </div>
 
-      {/* Draggable PDF card — shown after sending */}
       <PdfDragCard pdfBlob={pdfBlob} filename={pdfFilename} />
 
-      {/* Actions bar */}
       <InvoiceActions
-        onSaveDraft={() => save()}
+        onSaveDraft={handleSave}
         onDownloadPdf={handleDownloadPdf}
         onSendInvoice={handleSendInvoice}
         isNew={isNew}
+        isDirty={isDirty}
+        status={form.status}
         form={form}
+        clientId={invoiceForm.selectedClient?.id}
       />
 
-      {/* Send invoice dialog */}
       {emailContent && (
         <SendInvoiceDialog
           open={sendDialogOpen}
@@ -223,9 +211,26 @@ export default function InvoiceEditorPage() {
           recipientEmail={emailContent.to}
           subject={emailContent.subject}
           body={emailContent.body}
-          onConfirmSend={handleConfirmSend}
+          onConfirmSend={form.status === 'draft' ? handleConfirmSend : undefined}
         />
       )}
+
+      <Dialog open={blocker.state === 'blocked'} onOpenChange={(open) => !open && blocker.reset?.()}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Leave without saving?</DialogTitle>
+            <DialogDescription>Your changes to this invoice will be lost.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => blocker.reset?.()}>
+              Keep editing
+            </Button>
+            <Button variant="destructive" onClick={() => blocker.proceed?.()}>
+              Discard changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

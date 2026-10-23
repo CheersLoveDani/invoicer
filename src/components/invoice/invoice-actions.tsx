@@ -1,9 +1,19 @@
 import { useState } from 'react'
-import { Download, FileText, Loader2, Save, Send } from 'lucide-react'
+import { Download, FileText, Loader2, MoreHorizontal, Save, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { templateService } from '@/db'
 import type { InvoiceFormState } from '@/hooks/use-invoice-form'
+import type { InvoiceStatus } from '@/types'
+import { formatCurrency } from '@/lib/pdf-utils'
+import { invoiceTotal } from '@/lib/invoice-amounts'
+import { AnimatedNumber } from '@/components/ui/animated-number'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -16,11 +26,28 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 interface InvoiceActionsProps {
-  onSaveDraft: () => void
+  onSaveDraft: () => void | Promise<void>
   onDownloadPdf: () => void | Promise<void>
   onSendInvoice: () => Promise<void>
   isNew: boolean
+  isDirty: boolean
+  status: InvoiceStatus
   form: InvoiceFormState
+  /** Templates saved from an invoice stay linked to its client, so they can be scheduled. */
+  clientId?: string
+}
+
+function useBusy() {
+  const [busy, setBusy] = useState(false)
+  const run = async (task: () => void | Promise<void>) => {
+    setBusy(true)
+    try {
+      await task()
+    } finally {
+      setBusy(false)
+    }
+  }
+  return [busy, run] as const
 }
 
 export function InvoiceActions({
@@ -28,46 +55,43 @@ export function InvoiceActions({
   onDownloadPdf,
   onSendInvoice,
   isNew,
+  isDirty,
+  status,
   form,
+  clientId,
 }: InvoiceActionsProps) {
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [isSavingTemplate, setIsSavingTemplate] = useState(false)
-  const [isDownloading, setIsDownloading] = useState(false)
-  const [isSending, setIsSending] = useState(false)
+  const [isSaving, runSave] = useBusy()
+  const [isDownloading, runDownload] = useBusy()
+  const [isSending, runSend] = useBusy()
 
-  async function handleDownloadPdf() {
-    setIsDownloading(true)
-    try {
-      await onDownloadPdf()
-    } finally {
-      setIsDownloading(false)
-    }
-  }
+  const total = invoiceTotal(form)
+  const isDraft = status === 'draft'
 
   async function handleSaveTemplate() {
-    if (!templateName.trim()) {
-      toast.error('Please enter a template name')
-      return
-    }
-
+    if (!templateName.trim()) return
     setIsSavingTemplate(true)
     try {
       await templateService.create({
         name: templateName.trim(),
+        clientId,
         title: form.title,
         lineItems: form.lineItems,
         expenses: form.expenses,
         notes: form.notes,
-        paymentReference: form.paymentDetails.reference,
+        // Keep the number out of the template so each invoice gets its own
+        paymentReference:
+          form.paymentDetails.reference === form.invoiceNumber ? '' : form.paymentDetails.reference,
         pdfTemplate: form.pdfTemplate,
       })
-      toast.success('Template saved')
+      toast.success(`Template "${templateName.trim()}" saved`)
       setTemplateDialogOpen(false)
       setTemplateName('')
     } catch (err) {
       console.error('Failed to save template:', err)
-      toast.error('Failed to save template')
+      toast.error('The template was not saved. Try again.')
     } finally {
       setIsSavingTemplate(false)
     }
@@ -75,91 +99,82 @@ export function InvoiceActions({
 
   return (
     <>
-      <div className="sticky bottom-0 z-10 border-t bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={onSaveDraft}>
-            <Save className="size-4" />
-            {isNew ? 'Save as Draft' : 'Save'}
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={handleDownloadPdf}
-            disabled={isDownloading}
-          >
-            {isDownloading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Download className="size-4" />
-            )}
-            {isDownloading ? 'Generating...' : 'Download PDF'}
-          </Button>
-
-          <Button
-            variant="outline"
-            disabled={isSending}
-            onClick={async () => {
-              setIsSending(true)
-              try {
-                await onSendInvoice()
-              } finally {
-                setIsSending(false)
-              }
-            }}
-          >
-            {isSending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Send className="size-4" />
-            )}
-            {isSending ? 'Sending...' : 'Send Invoice'}
-          </Button>
-
-          <Button
-            variant="secondary"
-            onClick={() => setTemplateDialogOpen(true)}
-          >
-            <FileText className="size-4" />
-            Save as Template
-          </Button>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-t bg-card/80 px-4 py-3 backdrop-blur md:px-8">
+        <div className="mr-auto">
+          <p className="text-xs text-muted-foreground">Total</p>
+          <AnimatedNumber
+            value={total}
+            format={(n) => formatCurrency(n, form.currency)}
+            duration={350}
+            className="block text-xl leading-tight font-semibold tracking-tight tabular"
+          />
         </div>
+
+        <Button variant="ghost" onClick={() => runDownload(onDownloadPdf)} disabled={isDownloading}>
+          {isDownloading ? <Loader2 className="animate-spin" /> : <Download />}
+          PDF
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label="More actions">
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setTemplateDialogOpen(true)}>
+              <FileText />
+              Save as template
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <Button
+          variant={isDraft ? 'outline' : isDirty || isNew ? 'default' : 'outline'}
+          onClick={() => runSave(onSaveDraft)}
+          disabled={isSaving || (!isDirty && !isNew)}
+        >
+          {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
+          {isNew ? 'Save draft' : isDirty ? 'Save changes' : 'Saved'}
+        </Button>
+
+        <Button
+          variant={isDraft ? 'default' : 'outline'}
+          disabled={isSending}
+          onClick={() => runSend(onSendInvoice)}
+        >
+          {isSending ? <Loader2 className="animate-spin" /> : <Send />}
+          {isDraft ? 'Send invoice' : 'Email again'}
+        </Button>
       </div>
 
       <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Save as Template</DialogTitle>
+            <DialogTitle>Save as template</DialogTitle>
             <DialogDescription>
-              Save the current invoice form as a reusable template. Line items,
-              expenses, notes, and PDF settings will be preserved.
+              Keeps the work, expenses, notes and PDF style so the next invoice like this starts filled in.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 py-2">
-            <Label htmlFor="templateName">Template Name</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="templateName">Template name</Label>
             <Input
               id="templateName"
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
-              placeholder="e.g. Monthly Retainer"
+              placeholder="e.g. Monthly retainer"
+              autoFocus
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleSaveTemplate()
-                }
+                if (e.key === 'Enter') void handleSaveTemplate()
               }}
             />
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setTemplateDialogOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setTemplateDialogOpen(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={handleSaveTemplate}
-              disabled={isSavingTemplate || !templateName.trim()}
-            >
-              {isSavingTemplate ? 'Saving...' : 'Save Template'}
+            <Button onClick={handleSaveTemplate} disabled={isSavingTemplate || !templateName.trim()}>
+              {isSavingTemplate ? 'Saving…' : 'Save template'}
             </Button>
           </DialogFooter>
         </DialogContent>

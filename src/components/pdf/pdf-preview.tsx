@@ -14,7 +14,7 @@ interface PdfPreviewProps extends PdfTemplateProps {
  * Waits 600ms after the last props change before updating.
  */
 function PdfPreviewInner(props: PdfPreviewProps) {
-  const { template, ...templateProps } = props
+  const templateProps = props
   const [debouncedProps, setDebouncedProps] = useState(props)
   const [isUpdating, setIsUpdating] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -45,15 +45,11 @@ function PdfPreviewInner(props: PdfPreviewProps) {
 
   if (!hasMinimalData) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 bg-muted/30 p-6">
-        <div className="rounded-lg border-2 border-dashed border-muted-foreground/25 p-12 text-center">
-          <FileText className="mx-auto mb-3 size-12 text-muted-foreground/50" />
-          <p className="text-sm font-medium text-muted-foreground">
-            Start filling in the invoice to see a preview
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground/70">
-            Preview updates as you edit the invoice
-          </p>
+      <div className="flex h-full items-center justify-center p-8">
+        <div className="flex aspect-[1/1.414] w-full max-w-sm animate-page flex-col items-center justify-center rounded-lg border bg-card p-8 text-center shadow-card">
+          <FileText className="mb-3 size-10 text-muted-foreground/40" />
+          <p className="text-sm font-medium">The PDF appears here</p>
+          <p className="mt-1 text-xs text-muted-foreground">Pick a client or add an invoice number to start.</p>
         </div>
       </div>
     )
@@ -62,13 +58,16 @@ function PdfPreviewInner(props: PdfPreviewProps) {
   const { template: dTemplate, ...dTemplateProps } = debouncedProps
 
   return (
-    <div className="relative flex h-full flex-col bg-muted/30">
-      {isUpdating && (
-        <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-center gap-2 bg-background/80 py-1.5 text-xs text-muted-foreground backdrop-blur-sm">
-          <Loader2 className="size-3 animate-spin" />
-          Updating preview...
-        </div>
-      )}
+    <div className="relative flex h-full flex-col">
+      <div
+        className={`pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-popover/95 px-3 py-1 text-xs text-muted-foreground shadow-card backdrop-blur transition-[opacity,transform] duration-200 ${
+          isUpdating ? 'translate-y-0 opacity-100' : '-translate-y-1 opacity-0'
+        }`}
+        aria-hidden={!isUpdating}
+      >
+        <Loader2 className="size-3 animate-spin" />
+        Updating
+      </div>
       <PDFViewer
         style={{ flex: 1, border: 'none' }}
         showToolbar={false}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Copy } from 'lucide-react'
+import { Check, Copy, Mail, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { openEmailDraft } from '@/lib/email-utils'
 
 interface SendInvoiceDialogProps {
   open: boolean
@@ -20,7 +21,10 @@ interface SendInvoiceDialogProps {
   recipientEmail: string
   subject: string
   body: string
-  onConfirmSend: () => void
+  title?: string
+  description?: string
+  /** Shown when the email is for an invoice that should be recorded as sent. */
+  onConfirmSend?: () => void
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -30,10 +34,9 @@ function CopyButton({ text, label }: { text: string; label: string }) {
     try {
       await navigator.clipboard.writeText(text)
       setCopied(true)
-      toast.success(`${label} copied`)
-      setTimeout(() => setCopied(false), 2000)
+      setTimeout(() => setCopied(false), 1600)
     } catch {
-      toast.error('Failed to copy to clipboard')
+      toast.error('Could not copy. Select the text and copy it by hand.')
     }
   }
 
@@ -41,11 +44,17 @@ function CopyButton({ text, label }: { text: string; label: string }) {
     <Button
       type="button"
       variant="ghost"
-      size="icon-xs"
+      size="xs"
       onClick={handleCopy}
-      title={`Copy ${label.toLowerCase()}`}
+      className="text-muted-foreground"
+      aria-label={`Copy ${label.toLowerCase()}`}
     >
-      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      {copied ? (
+        <Check key="done" className="size-3.5 animate-pop text-success" />
+      ) : (
+        <Copy className="size-3.5" />
+      )}
+      {copied ? 'Copied' : 'Copy'}
     </Button>
   )
 }
@@ -56,15 +65,16 @@ export function SendInvoiceDialog({
   recipientEmail,
   subject,
   body,
+  title = 'Email the invoice',
+  description = 'Open a ready-made draft in your mail app, or copy the parts you need. Drag the PDF card onto the draft to attach it.',
   onConfirmSend,
 }: SendInvoiceDialogProps) {
-  async function handleCopyAll() {
+  async function handleOpenMail() {
     try {
-      const full = `To: ${recipientEmail}\nSubject: ${subject}\n\n${body}`
-      await navigator.clipboard.writeText(full)
-      toast.success('Email content copied')
-    } catch {
-      toast.error('Failed to copy to clipboard')
+      await openEmailDraft({ to: recipientEmail, subject, body })
+    } catch (err) {
+      console.error('Failed to open mail app:', err)
+      toast.error('No mail app opened. Copy the email instead.')
     }
   }
 
@@ -72,22 +82,20 @@ export function SendInvoiceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Send Invoice</DialogTitle>
-          <DialogDescription>
-            Copy the email details below and paste into your email client.
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label>To</Label>
-              <CopyButton text={recipientEmail} label="Email" />
+              <CopyButton text={recipientEmail} label="Email address" />
             </div>
             <Input value={recipientEmail} readOnly className="bg-muted/50" />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label>Subject</Label>
               <CopyButton text={subject} label="Subject" />
@@ -95,27 +103,28 @@ export function SendInvoiceDialog({
             <Input value={subject} readOnly className="bg-muted/50" />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label>Body</Label>
-              <CopyButton text={body} label="Body" />
+              <Label>Message</Label>
+              <CopyButton text={body} label="Message" />
             </div>
-            <Textarea
-              value={body}
-              readOnly
-              className="min-h-32 bg-muted/50"
-            />
+            <Textarea value={body} readOnly className="max-h-60 min-h-32 bg-muted/50" />
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={handleCopyAll}>
-            <Copy className="mr-2 size-4" />
-            Copy All
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={handleOpenMail} disabled={!recipientEmail}>
+            <Mail />
+            Open in mail app
           </Button>
-          <Button onClick={onConfirmSend}>
-            Mark as Sent
-          </Button>
+          {onConfirmSend ? (
+            <Button onClick={onConfirmSend}>
+              <Send />
+              Mark as sent
+            </Button>
+          ) : (
+            <Button onClick={() => onOpenChange(false)}>Done</Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

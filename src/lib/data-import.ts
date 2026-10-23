@@ -1,4 +1,5 @@
 import { db } from '@/db'
+import { reconcileInvoiceNumbers } from '@/db/database'
 
 export interface ImportData {
   version: number
@@ -19,6 +20,18 @@ export interface ImportCounts {
   schedules: number
   appSettings: number
 }
+
+const DATE_FIELDS = new Set([
+  'date',
+  'dueDate',
+  'sentAt',
+  'paidAt',
+  'createdAt',
+  'updatedAt',
+  'nextDueDate',
+  'lastGeneratedDate',
+  'lastBackupDate',
+])
 
 const REQUIRED_KEYS: (keyof ImportData)[] = [
   'userProfile',
@@ -48,7 +61,13 @@ export function parseImportFile(text: string): {
   data: ImportData
   counts: ImportCounts
 } {
-  const parsed: unknown = JSON.parse(text)
+  // Backups store dates as ISO strings; turn them back into Dates so
+  // comparisons, sorting and charts work on restored data
+  const parsed: unknown = JSON.parse(text, (key, value) =>
+    DATE_FIELDS.has(key) && typeof value === 'string' && !Number.isNaN(Date.parse(value))
+      ? new Date(value)
+      : value,
+  )
 
   if (!isValidImportData(parsed)) {
     throw new Error(
@@ -110,6 +129,12 @@ export async function importAllData(data: ImportData): Promise<void> {
       }
       if (data.appSettings.length > 0) {
         await db.appSettings.bulkAdd(data.appSettings as never[])
+      }
+
+      // Backups from before invoice numbering followed sent invoices carry
+      // inflated counters; bring them in line the same way the upgrade does
+      if (data.version < 2) {
+        await reconcileInvoiceNumbers(db.clients, db.invoices)
       }
     }
   )

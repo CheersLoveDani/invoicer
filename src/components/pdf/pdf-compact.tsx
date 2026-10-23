@@ -166,6 +166,7 @@ export function CompactTemplate({
   title,
   invoiceNumber,
   date,
+  dueDate,
   from,
   to,
   lineItems,
@@ -191,7 +192,10 @@ export function CompactTemplate({
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.title}>{title || 'Invoice'}</Text>
-            <Text style={styles.metaText}>#{invoiceNumber}  |  {formatDate(date)}</Text>
+            <Text style={styles.metaText}>
+              #{invoiceNumber}  |  {formatDate(date)}
+              {dueDate ? `  |  Due ${formatDate(dueDate)}` : ''}
+            </Text>
           </View>
           {logo ? <Image style={styles.logo} src={logo} /> : null}
         </View>

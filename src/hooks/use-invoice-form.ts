@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
 import { addDays, addWeeks, addMonths } from 'date-fns'
@@ -19,6 +19,7 @@ import type {
   InvoicePaymentDetails,
   LineItem,
   PdfTemplate,
+  Schedule,
 } from '@/types'
 
 export type InvoiceFormMode = 'blank' | 'template' | 'client' | 'duplicate' | 'edit'
@@ -38,6 +39,7 @@ export interface InvoiceFormState {
   currency: Currency
   pdfTemplate: PdfTemplate
   templateId?: string
+  clientId?: string
 }
 
 export interface UseInvoiceFormReturn {
@@ -48,8 +50,11 @@ export interface UseInvoiceFormReturn {
   setExpenses: (items: LineItem[]) => void
   total: number
   save: () => Promise<string>
+  /** Record in the form that the saved invoice has been sent, so a later save keeps that. */
+  markSent: () => void
   isLoading: boolean
   isDirty: boolean
+  hasUnsavedChanges: () => boolean
   mode: InvoiceFormMode
   selectedClient: Client | undefined
 }
@@ -69,49 +74,48 @@ const emptyPayment: InvoicePaymentDetails = {
   reference: '',
 }
 
+/** The schedule's next date after `from`, a whole number of intervals on from `due`. */
+export function nextScheduleDate(
+  due: Date,
+  frequency: Schedule['frequency'],
+  customIntervalDays: number | undefined,
+  from: Date,
+): Date {
+  // Counting each step from the original date keeps a schedule on the 31st
+  // on month ends instead of drifting to the 28th after February
+  const step = (n: number) =>
+    frequency === 'weekly'
+      ? addWeeks(due, n)
+      : frequency === 'custom'
+        ? addDays(due, n * Math.max(1, customIntervalDays ?? 14))
+        : addMonths(due, n)
+  let n = 1
+  while (step(n) <= from) n++
+  return step(n)
+}
+
 /**
- * After saving an invoice created from a schedule (template+client combo),
- * advance the schedule's nextDueDate based on its frequency.
+ * After saving an invoice that was started from a schedule, move the
+ * schedule on to its next date in the future.
  */
-async function advanceMatchingSchedule(
-  templateId: string | undefined,
-  clientId: string | undefined,
-): Promise<void> {
-  if (!templateId || !clientId) return
+async function advanceSchedule(scheduleId: string | null): Promise<void> {
+  if (!scheduleId) return
   try {
-    const allSchedules = await scheduleService.getAll()
-    const match = allSchedules.find(
-      (s) =>
-        s.active &&
-        s.templateId === templateId &&
-        s.clientId === clientId,
-    )
-    if (!match) return
-
-    const currentDue = new Date(match.nextDueDate)
-    let nextDue: Date
-
-    switch (match.frequency) {
-      case 'weekly':
-        nextDue = addWeeks(currentDue, 1)
-        break
-      case 'monthly':
-        nextDue = addMonths(currentDue, 1)
-        break
-      case 'custom':
-        nextDue = addDays(currentDue, match.customIntervalDays ?? 14)
-        break
-      default:
-        nextDue = addMonths(currentDue, 1)
-    }
-
-    await scheduleService.update(match.id, {
-      lastGeneratedDate: new Date(),
-      nextDueDate: nextDue,
+    const schedule = await scheduleService.getById(scheduleId)
+    if (!schedule) return
+    const now = new Date()
+    await scheduleService.update(schedule.id, {
+      lastGeneratedDate: now,
+      nextDueDate: nextScheduleDate(
+        new Date(schedule.nextDueDate),
+        schedule.frequency,
+        schedule.customIntervalDays,
+        now,
+      ),
     })
-  } catch {
-    // Silently ignore schedule advancement errors —
-    // the invoice was already saved successfully
+  } catch (err) {
+    // The invoice itself was saved; only the schedule's date is left behind
+    console.error('Failed to advance schedule:', err)
   }
 }
 
@@ -142,6 +146,7 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
   const templateParam = searchParams.get('template')
   const clientParam = searchParams.get('client')
   const duplicateParam = searchParams.get('duplicate')
+  const scheduleParam = searchParams.get('schedule')
 
   const mode: InvoiceFormMode = id
     ? 'edit'
@@ -156,6 +161,12 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
   const [form, setForm] = useState<InvoiceFormState>(createBlankForm)
   const [isLoading, setIsLoading] = useState(true)
   const [isDirty, setIsDirty] = useState(false)
+  // Read synchronously by the leave-page guard, which runs before state updates land
+  const dirtyRef = useRef(false)
+  const markDirty = useCallback((dirty: boolean) => {
+    dirtyRef.current = dirty
+    setIsDirty(dirty)
+  }, [])
   const [selectedClient, setSelectedClient] = useState<Client | undefined>(undefined)
   const [existingId, setExistingId] = useState<string | undefined>(id)
 
@@ -165,6 +176,10 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
 
     async function init() {
       setIsLoading(true)
+      // The editor stays mounted between routes, so forget the previous invoice
+      setExistingId(id)
+      setSelectedClient(undefined)
+      markDirty(false)
       try {
         const [profile, settings] = await Promise.all([
           profileService.get(),
@@ -188,7 +203,7 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
 
         const baseCurrency = profile.defaultCurrency || 'GBP'
         const basePdfTemplate = settings.defaultPdfTemplate || 'clean'
-        const dueDays = settings.defaultDueDays || 30
+        const dueDays = settings.defaultDueDays ?? 30
 
         if (cancelled) return
 
@@ -216,7 +231,10 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
             currency: invoice.currency,
             pdfTemplate: invoice.pdfTemplate,
             templateId: invoice.templateId,
+            clientId: invoice.clientId,
           })
+          const owner = await clientService.findForInvoice(invoice)
+          if (!cancelled) setSelectedClient(owner)
         } else if (mode === 'template' && templateParam) {
           const template = await templateService.getById(templateParam)
           if (!template) {
@@ -235,10 +253,13 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
             let invoiceNumber = ''
             let client: Client | undefined
 
-            if (template.clientId) {
-              client = await clientService.getById(template.clientId)
+            // A schedule names its client; otherwise use the template's own
+            const templateClientId = clientParam ?? template.clientId
+            if (templateClientId) {
+              client = await clientService.getById(templateClientId)
               if (client) {
-                invoiceNumber = await clientService.incrementInvoiceNumber(client.id)
+                invoiceNumber = await clientService.suggestInvoiceNumber(client.id)
+                if (cancelled) return
                 setSelectedClient(client)
               }
             }
@@ -256,11 +277,14 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
               notes: template.notes,
               paymentDetails: {
                 ...paymentDetails,
-                reference: template.paymentReference || invoiceNumber,
+                reference: template.paymentReference
+                  ? template.paymentReference.replace(/\{number\}/g, invoiceNumber)
+                  : invoiceNumber,
               },
               currency: baseCurrency,
               pdfTemplate: template.pdfTemplate,
               templateId: template.id,
+              clientId: client?.id,
               dueDate: addDays(new Date(), dueDays),
             })
           }
@@ -268,11 +292,13 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
           const client = await clientService.getById(clientParam)
           if (cancelled) return
           if (client) {
-            const invoiceNumber = await clientService.incrementInvoiceNumber(client.id)
+            const invoiceNumber = await clientService.suggestInvoiceNumber(client.id)
+            if (cancelled) return
             setSelectedClient(client)
             setForm({
               ...createBlankForm(),
               invoiceNumber,
+              clientId: client.id,
               from: fromSnapshot,
               to: {
                 name: client.name,
@@ -313,14 +339,21 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
               dueDate: addDays(new Date(), dueDays),
             })
           } else {
-            // Try to increment the number by parsing the original
+            // Take the client's next number; without a client, count on from the original
+            const owner = await clientService.findForInvoice(original)
             let newNumber = original.invoiceNumber
-            const match = original.invoiceNumber.match(/^(.*?)(\d+)$/)
-            if (match) {
-              const prefix = match[1]
-              const num = parseInt(match[2], 10) + 1
-              newNumber = `${prefix}${String(num).padStart(match[2].length, '0')}`
+            if (owner) {
+              newNumber = await clientService.suggestInvoiceNumber(owner.id)
+            } else {
+              const match = original.invoiceNumber.match(/^(.*?)(\d+)$/)
+              if (match) {
+                const prefix = match[1]
+                const num = parseInt(match[2], 10) + 1
+                newNumber = `${prefix}${String(num).padStart(match[2].length, '0')}`
+              }
             }
+            if (cancelled) return
+            setSelectedClient(owner)
 
             setForm({
               invoiceNumber: newNumber,
@@ -337,6 +370,7 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
               currency: original.currency,
               pdfTemplate: original.pdfTemplate,
               templateId: original.templateId,
+              clientId: owner?.id,
             })
           }
         } else {
@@ -369,60 +403,66 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
 
   const setField = useCallback(
     <K extends keyof InvoiceFormState>(field: K, value: InvoiceFormState[K]) => {
-      setForm((prev) => ({ ...prev, [field]: value }))
-      setIsDirty(true)
+      setForm((prev) => {
+        const next = { ...prev, [field]: value }
+        // A payment reference that mirrored the invoice number keeps mirroring it
+        if (field === 'invoiceNumber' && prev.paymentDetails.reference === prev.invoiceNumber) {
+          next.paymentDetails = { ...prev.paymentDetails, reference: value as string }
+        }
+        return next
+      })
+      markDirty(true)
     },
-    [],
+    [markDirty],
   )
 
   const setClientDetails = useCallback(
     async (client: Client | null) => {
-      if (client === null) {
-        // "Enter manually" — clear to fields so user can type
+      if (!client) {
+        // "Enter manually" or cleared — empty the fields so the user can type
         setSelectedClient(undefined)
-        setForm((prev) => ({
-          ...prev,
-          to: { ...emptyFrom },
-        }))
-      } else if (client === (undefined as unknown as Client)) {
-        // Clear selection
-        setSelectedClient(undefined)
-        setForm((prev) => ({
-          ...prev,
-          to: { ...emptyFrom },
-        }))
-      } else {
-        setSelectedClient(client)
-        const invoiceNumber = await clientService.incrementInvoiceNumber(client.id)
-        setForm((prev) => ({
-          ...prev,
-          invoiceNumber,
-          to: {
-            name: client.name,
-            email: client.email,
-            address: client.address,
-            phone: '',
-          },
-          paymentDetails: {
-            ...prev.paymentDetails,
-            reference: invoiceNumber,
-          },
-        }))
+        setForm((prev) => ({ ...prev, clientId: undefined, to: { ...emptyFrom } }))
+        markDirty(true)
+        return
       }
-      setIsDirty(true)
+      setSelectedClient(client)
+      // A sent invoice keeps the number it went out with
+      const keepNumber = form.status !== 'draft'
+      const invoiceNumber = keepNumber
+        ? form.invoiceNumber
+        : await clientService.suggestInvoiceNumber(client.id, existingId)
+      setForm((prev) => ({
+        ...prev,
+        invoiceNumber,
+        clientId: client.id,
+        to: {
+          name: client.name,
+          email: client.email,
+          address: client.address,
+          phone: '',
+        },
+        paymentDetails: {
+          ...prev.paymentDetails,
+          reference:
+            !prev.paymentDetails.reference || prev.paymentDetails.reference === prev.invoiceNumber
+              ? invoiceNumber
+              : prev.paymentDetails.reference,
+        },
+      }))
+      markDirty(true)
     },
-    [],
+    [form.status, form.invoiceNumber, existingId, markDirty],
   )
 
   const setLineItems = useCallback((items: LineItem[]) => {
     setForm((prev) => ({ ...prev, lineItems: items }))
-    setIsDirty(true)
-  }, [])
+    markDirty(true)
+  }, [markDirty])
 
   const setExpenses = useCallback((items: LineItem[]) => {
     setForm((prev) => ({ ...prev, expenses: items }))
-    setIsDirty(true)
-  }, [])
+    markDirty(true)
+  }, [markDirty])
 
   const total = useMemo(() => {
     const lineItemsTotal = form.lineItems.reduce((s, i) => s + i.price, 0)
@@ -446,26 +486,30 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
       currency: form.currency,
       pdfTemplate: form.pdfTemplate,
       templateId: form.templateId,
+      clientId: selectedClient?.id ?? form.clientId,
     }
 
-    if (mode === 'edit' && existingId) {
+    if (existingId) {
       await invoiceService.update(existingId, data)
-      setIsDirty(false)
+      markDirty(false)
       toast.success('Invoice updated')
       return existingId
     } else {
       const newId = await invoiceService.create(data)
       setExistingId(newId)
-      setIsDirty(false)
+      markDirty(false)
       toast.success('Invoice created')
 
-      // Advance any matching schedule after creating an invoice from a template
-      await advanceMatchingSchedule(form.templateId, selectedClient?.id)
+      await advanceSchedule(scheduleParam)
 
       navigate(`/invoices/${newId}`, { replace: true })
       return newId
     }
-  }, [form, mode, existingId, navigate, selectedClient])
+  }, [form, existingId, navigate, selectedClient, scheduleParam, markDirty])
+
+  const markSent = useCallback(() => {
+    setForm((prev) => (prev.status === 'draft' ? { ...prev, status: 'sent' } : prev))
+  }, [])
 
   return {
     form,
@@ -475,8 +519,10 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
     setExpenses,
     total,
     save,
+    markSent,
     isLoading,
     isDirty,
+    hasUnsavedChanges: () => dirtyRef.current,
     mode,
     selectedClient,
   }

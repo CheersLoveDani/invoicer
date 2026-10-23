@@ -8,7 +8,6 @@ import {
   endOfWeek,
   eachDayOfInterval,
   isSameMonth,
-  isSameDay,
   isToday,
   addMonths,
   subMonths,
@@ -21,6 +20,7 @@ import {
   PopoverContent,
 } from '@/components/ui/popover'
 import { db } from '@/db/database'
+import { isOverdue } from '@/lib/invoice-amounts'
 import type { Invoice, Schedule, Client, InvoiceTemplate } from '@/types'
 import { CalendarDayDetail } from './calendar-day-detail'
 
@@ -32,12 +32,23 @@ interface EventDot {
 }
 
 const DOT_COLORS: Record<DotColor, string> = {
-  green: 'bg-green-500',
-  blue: 'bg-blue-500',
-  red: 'bg-red-500',
-  orange: 'bg-orange-500',
-  gray: 'bg-muted-foreground',
+  green: 'bg-success',
+  blue: 'bg-info',
+  red: 'bg-warning',
+  orange: 'bg-chart-4',
+  gray: 'bg-muted-foreground/60',
 }
+
+const LEGEND: { color: DotColor; label: string }[] = [
+  { color: 'blue', label: 'Sent' },
+  { color: 'gray', label: 'Due' },
+  { color: 'red', label: 'Overdue' },
+  { color: 'green', label: 'Paid' },
+  { color: 'orange', label: 'Scheduled' },
+]
+
+// One shared empty list, so memoised maps do not rebuild while data loads
+const NONE: never[] = []
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -53,16 +64,12 @@ export function CalendarView() {
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 })
   const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 })
 
-  const days = useMemo(
-    () => eachDayOfInterval({ start: gridStart, end: gridEnd }),
-    [gridStart.getTime(), gridEnd.getTime()]
-  )
+  const days = eachDayOfInterval({ start: gridStart, end: gridEnd })
 
-  // Load all invoices and active schedules
-  const invoices = useLiveQuery(() => db.invoices.toArray()) ?? []
-  const schedules = useLiveQuery(() => db.schedules.where('active').equals(1).toArray()) ?? []
-  const clients = useLiveQuery(() => db.clients.toArray()) ?? []
-  const templates = useLiveQuery(() => db.templates.toArray()) ?? []
+  const invoices = useLiveQuery(() => db.invoices.toArray(), [], NONE as Invoice[])
+  const schedules = useLiveQuery(() => db.schedules.filter((s) => s.active).toArray(), [], NONE as Schedule[])
+  const clients = useLiveQuery(() => db.clients.toArray(), [], NONE as Client[])
+  const templates = useLiveQuery(() => db.templates.toArray(), [], NONE as InvoiceTemplate[])
 
   // Build lookup maps for clients and templates
   const clientMap = useMemo(() => {
@@ -113,13 +120,8 @@ export function CalendarView() {
       }
 
       // Red dot: overdue (due date passed, still sent status)
-      if (inv.status === 'sent') {
-        const dueDate = new Date(inv.dueDate)
-        const now = new Date()
-        if (dueDate <= now) {
-          const key = toDateKey(dueDate)
-          addDot(key, { color: 'red', label: 'Overdue' })
-        }
+      if (isOverdue(inv)) {
+        addDot(toDateKey(new Date(inv.dueDate)), { color: 'red', label: 'Overdue' })
       }
     }
 
@@ -202,24 +204,37 @@ export function CalendarView() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header with month navigation */}
-      <div className="flex items-center justify-between">
-        <Button variant="outline" size="icon" onClick={goToPrevMonth}>
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <h3 className="text-lg font-semibold">
+    <section className="space-y-4 rounded-xl border bg-card p-5 shadow-card">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 key={format(currentMonth, 'yyyy-MM')} className="animate-page text-base font-semibold">
           {format(currentMonth, 'MMMM yyyy')}
         </h3>
-        <Button variant="outline" size="icon" onClick={goToNextMonth}>
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {!isSameMonth(currentMonth, new Date()) && (
+            <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(new Date())}>
+              Today
+            </Button>
+          )}
+          <Button variant="outline" size="icon-sm" onClick={goToPrevMonth} aria-label="Previous month">
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon-sm" onClick={goToNextMonth} aria-label="Next month">
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
-      {/* Calendar grid */}
-      <div className="rounded-lg border">
-        {/* Weekday header */}
-        <div className="grid grid-cols-7 border-b bg-muted/30">
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        {LEGEND.map((item) => (
+          <li key={item.color} className="flex items-center gap-1.5">
+            <span className={`size-2 rounded-full ${DOT_COLORS[item.color]}`} />
+            {item.label}
+          </li>
+        ))}
+      </ul>
+
+      <div className="overflow-hidden rounded-lg border">
+        <div className="grid grid-cols-7 border-b bg-muted/40">
           {WEEKDAYS.map((day) => (
             <div
               key={day}
@@ -246,16 +261,15 @@ export function CalendarView() {
                   <button
                     type="button"
                     className={`
-                      flex min-h-[4rem] flex-col items-center gap-1 border-b border-r p-1.5 text-sm transition-colors
-                      hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset
-                      ${!inCurrentMonth ? 'text-muted-foreground/40' : ''}
+                      flex min-h-[4.5rem] cursor-pointer flex-col items-center gap-1.5 border-r border-b p-1.5 text-sm transition-colors
+                      [&:nth-child(7n)]:border-r-0 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-[state=open]:bg-muted/60
+                      ${!inCurrentMonth ? 'bg-muted/20 text-muted-foreground/40' : ''}
                     `}
                   >
                     <span
                       className={`
-                        flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium
-                        ${today ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : ''}
-                        ${isSameDay(day, new Date()) && inCurrentMonth ? 'font-bold' : ''}
+                        flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium tabular
+                        ${today ? 'bg-primary font-semibold text-primary-foreground' : ''}
                       `}
                     >
                       {format(day, 'd')}
@@ -267,7 +281,7 @@ export function CalendarView() {
                         {dots.map((dot) => (
                           <span
                             key={dot.color}
-                            className={`h-1.5 w-1.5 rounded-full ${DOT_COLORS[dot.color]}`}
+                            className={`size-1.5 rounded-full ${DOT_COLORS[dot.color]}`}
                             title={dot.label}
                           />
                         ))}
@@ -287,6 +301,6 @@ export function CalendarView() {
           })}
         </div>
       </div>
-    </div>
+    </section>
   )
 }

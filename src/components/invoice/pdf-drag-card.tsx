@@ -44,8 +44,8 @@ export function PdfDragCard({ pdfBlob, filename }: PdfDragCardProps) {
   return (
     <div
       className={cn(
-        'animate-in fade-in slide-in-from-bottom-2 duration-300',
-        'mx-6 my-3',
+        'animate-rise',
+        'mx-4 my-3 md:mx-8',
       )}
     >
       <div
@@ -53,8 +53,8 @@ export function PdfDragCard({ pdfBlob, filename }: PdfDragCardProps) {
         onDragStart={handleDragStart}
         onClick={handleClick}
         className={cn(
-          'flex cursor-grab items-center gap-3 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/50 px-4 py-3',
-          'transition-all hover:border-primary/50 hover:bg-muted active:cursor-grabbing',
+          'flex cursor-grab items-center gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/[0.04] px-4 py-3',
+          'transition-[border-color,background-color,transform] duration-150 hover:border-primary hover:bg-primary/[0.07] active:scale-[0.99] active:cursor-grabbing',
         )}
         role="button"
         tabIndex={0}
@@ -66,8 +66,8 @@ export function PdfDragCard({ pdfBlob, filename }: PdfDragCardProps) {
         }}
       >
         <GripVertical className="size-4 shrink-0 text-muted-foreground/50" />
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-red-100 dark:bg-red-900/30">
-          <FileDown className="size-5 text-red-600 dark:text-red-400" />
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <FileDown className="size-5" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{filename}</p>
@@ -76,7 +76,7 @@ export function PdfDragCard({ pdfBlob, filename }: PdfDragCardProps) {
           </p>
         </div>
         <span className="shrink-0 text-xs text-muted-foreground">
-          Drag to attach to email or click to download
+          Drag onto your email to attach, or click to save
         </span>
       </div>
     </div>

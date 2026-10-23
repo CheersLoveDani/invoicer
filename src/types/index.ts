@@ -48,6 +48,7 @@ export interface Client {
   email: string
   address: string
   invoicePrefix: string
+  /** The lowest number the next invoice may take; moves past each number once its invoice is sent. */
   nextInvoiceNumber: number
   notes: string
   emailSubject?: string
@@ -101,6 +102,7 @@ export interface Invoice {
   currency: Currency
   pdfTemplate: PdfTemplate
   templateId?: string
+  clientId?: string
   createdAt: Date
   sentAt?: Date
   paidAt?: Date
