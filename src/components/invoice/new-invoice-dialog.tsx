@@ -69,10 +69,11 @@ export function NewInvoiceDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={setOpen}>
-      <DialogContent className="gap-5 sm:max-w-xl">
+      {/* Grows with its rows up to a cap; long names truncate rather than widen it */}
+      <DialogContent className="w-fit min-w-[min(34rem,calc(100%-2rem))] grid-cols-[minmax(0,1fr)] gap-5 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>New invoice</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="max-w-lg">
             Start from nothing, or copy one you have already made. Copies get the client's next number and today's date.
           </DialogDescription>
         </DialogHeader>
@@ -127,7 +128,7 @@ export function NewInvoiceDialog() {
             </div>
           </div>
 
-          <div key={source} className="max-h-72 min-h-32 animate-page overflow-y-auto rounded-xl border p-1">
+          <div key={source} className="max-h-[min(24rem,calc(100dvh-22rem))] min-h-32 animate-page overflow-y-auto rounded-xl border p-1">
             {source === 'invoice' ? (
               shownInvoices.length === 0 ? (
                 <p className="px-3 py-8 text-center text-sm text-muted-foreground">
