@@ -88,7 +88,18 @@ export default function InvoiceEditorPage() {
     [form, logo],
   )
 
+  // A PDF that leaves the app is a real invoice, so it is saved first.
+  // Otherwise it could be sent and then lost when the editor is closed.
   const handleDownloadPdf = useCallback(async () => {
+    if (isNew || hasUnsavedChanges()) {
+      try {
+        await save()
+      } catch (err) {
+        console.error('Failed to save invoice:', err)
+        toast.error('The invoice was not saved, so no PDF was made. Try again.')
+        return
+      }
+    }
     try {
       const saved = await saveBlob(await renderPdf(), {
         suggestedName: invoicePdfFilename(form),
@@ -99,7 +110,7 @@ export default function InvoiceEditorPage() {
       console.error('Failed to generate PDF:', err)
       toast.error('The PDF could not be made. Try again.')
     }
-  }, [form, renderPdf])
+  }, [form, renderPdf, isNew, hasUnsavedChanges, save])
 
   const handleSendInvoice = useCallback(async () => {
     try {
