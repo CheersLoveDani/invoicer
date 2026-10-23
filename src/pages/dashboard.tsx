@@ -1,14 +1,7 @@
-import { Link, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, FileText, ChevronDown } from 'lucide-react'
-import { db, profileService } from '@/db'
+import { Plus } from 'lucide-react'
+import { profileService } from '@/db'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { StatsCards } from '@/components/dashboard/stats-cards'
 import { NotificationPanel } from '@/components/dashboard/notification-panel'
@@ -17,6 +10,7 @@ import { RecentActivity } from '@/components/dashboard/recent-activity'
 import { CalendarView } from '@/components/dashboard/calendar-view'
 import { EarningsPanel } from '@/components/dashboard/earnings-panel'
 import { PageHeader } from '@/components/layout/page-header'
+import { openNewInvoice } from '@/components/invoice/new-invoice-dialog'
 
 function greeting(name: string) {
   const hour = new Date().getHours()
@@ -26,8 +20,6 @@ function greeting(name: string) {
 }
 
 export default function DashboardPage() {
-  const navigate = useNavigate()
-  const templates = useLiveQuery(() => db.templates.toArray()) ?? []
   const profile = useLiveQuery(() => profileService.get())
 
   return (
@@ -36,32 +28,10 @@ export default function DashboardPage() {
         title={profile ? greeting(profile.name) : 'Dashboard'}
         description="Here is where your invoices stand."
         actions={
-          <>
-            {templates.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline">
-                    <FileText />
-                    From a template
-                    <ChevronDown className="text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-48">
-                  {templates.map((t) => (
-                    <DropdownMenuItem key={t.id} onClick={() => navigate(`/invoices/new?template=${t.id}`)}>
-                      {t.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            <Button asChild>
-              <Link to="/invoices/new">
-                <Plus />
-                New invoice
-              </Link>
-            </Button>
-          </>
+          <Button onClick={openNewInvoice}>
+            <Plus />
+            New invoice
+          </Button>
         }
       />
 

@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { endOfDay, startOfDay } from 'date-fns'
 import { Plus, CheckCircle2, Trash2, FileDown, X } from 'lucide-react'
@@ -20,6 +19,7 @@ import {
 import { InvoiceFilters, defaultFilters, type FilterState } from '@/components/invoices/invoice-filters'
 import { InvoiceTable } from '@/components/invoices/invoice-table'
 import { PageHeader } from '@/components/layout/page-header'
+import { openNewInvoice } from '@/components/invoice/new-invoice-dialog'
 
 function applyFilters(invoices: Invoice[], filters: FilterState): Invoice[] {
   let result = invoices
@@ -152,11 +152,9 @@ export default function InvoicesPage() {
               : plural(allInvoices.length)
         }
         actions={
-          <Button asChild>
-            <Link to="/invoices/new">
-              <Plus />
-              New invoice
-            </Link>
+          <Button onClick={openNewInvoice}>
+            <Plus />
+            New invoice
           </Button>
         }
       />

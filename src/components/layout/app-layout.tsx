@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar, SidebarContent } from '@/components/layout/sidebar'
 import { TopBar } from '@/components/layout/top-bar'
 import { UpdateNotifier } from '@/components/layout/update-notifier'
+import { NewInvoiceDialog } from '@/components/invoice/new-invoice-dialog'
 import { Toaster } from '@/components/ui/sonner'
 import { NotificationsProvider } from '@/hooks/use-notifications'
 import { cn } from '@/lib/utils'
@@ -63,6 +64,7 @@ export function AppLayout() {
       </div>
       <Toaster />
       <UpdateNotifier />
+      <NewInvoiceDialog />
     </div>
     </NotificationsProvider>
   )

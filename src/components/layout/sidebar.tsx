@@ -1,9 +1,10 @@
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { motion } from 'motion/react'
 import { LayoutDashboard, FileText, Plus, Users, Settings, Download } from 'lucide-react'
 import { db } from '@/db'
 import { cn } from '@/lib/utils'
+import { openNewInvoice } from '@/components/invoice/new-invoice-dialog'
 import { isOverdue } from '@/lib/invoice-amounts'
 import { APP_VERSION, updater, useUpdateState } from '@/lib/native/updater'
 
@@ -79,7 +80,6 @@ function SidebarNavItem({
 
 export function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   const { pathname } = useLocation()
-  const navigate = useNavigate()
   const update = useUpdateState()
   const overdue = useLiveQuery(async () => {
     const sent = await db.invoices.where('status').equals('sent').toArray()
@@ -104,8 +104,8 @@ export function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         <button
           type="button"
           onClick={() => {
-            navigate('/invoices/new')
             onNavClick?.()
+            openNewInvoice()
           }}
           className={cn(
             'flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-[background-color,transform,box-shadow] duration-150 active:scale-[0.97]',
