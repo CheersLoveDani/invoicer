@@ -30,6 +30,7 @@ interface TemplateCardProps {
 }
 
 const PDF_TEMPLATE_LABELS: Record<string, string> = {
+  elegant: 'Elegant',
   clean: 'Clean',
   modern: 'Modern',
   compact: 'Compact',

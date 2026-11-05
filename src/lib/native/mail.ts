@@ -10,6 +10,10 @@ export interface OutgoingEmail {
   to: string
   subject: string
   body: string
+  /** A styled version of the body. */
+  html?: string
+  /** Images the HTML shows as "cid:<cid>". */
+  inlineImages?: { cid: string; data: Blob }[]
   attachment?: { name: string; data: Blob }
 }
 
@@ -70,6 +74,13 @@ export const mail = {
           attachmentBase64: await blobToBase64(email.attachment.data),
         }
       : {}
+    const inlineImages = await Promise.all(
+      (email.inlineImages ?? []).map(async (image) => ({
+        cid: image.cid,
+        contentType: image.data.type || 'image/png',
+        base64: await blobToBase64(image.data),
+      })),
+    )
     await invoke('smtp_send', {
       config: {
         host: smtp.host.trim(),
@@ -79,7 +90,7 @@ export const mail = {
         fromName: smtp.fromName,
         fromEmail: smtp.fromEmail.trim(),
       },
-      email: { to: email.to, subject: email.subject, body: email.body, ...attachment },
+      email: { to: email.to, subject: email.subject, body: email.body, html: email.html, inlineImages, ...attachment },
     })
   },
 }

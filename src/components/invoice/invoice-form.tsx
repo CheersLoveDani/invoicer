@@ -34,6 +34,7 @@ const CURRENCIES = (Object.keys(CURRENCY_SYMBOLS) as Currency[]).map((value) => 
 }))
 
 const PDF_TEMPLATES: { value: PdfTemplate; label: string; hint: string }[] = [
+  { value: 'elegant', label: 'Elegant', hint: 'Navy header, gold accents' },
   { value: 'clean', label: 'Clean', hint: 'Plain and airy' },
   { value: 'modern', label: 'Modern', hint: 'With a colour band' },
   { value: 'compact', label: 'Compact', hint: 'Fits more on a page' },

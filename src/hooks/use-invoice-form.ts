@@ -115,7 +115,7 @@ function createBlankForm(): InvoiceFormState {
     notes: '',
     paymentDetails: { ...emptyPayment },
     currency: 'GBP',
-    pdfTemplate: 'clean',
+    pdfTemplate: 'elegant',
   }
 }
 
@@ -183,7 +183,7 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
         }
 
         const baseCurrency = profile.defaultCurrency || 'GBP'
-        const basePdfTemplate = settings.defaultPdfTemplate || 'clean'
+        const basePdfTemplate = settings.defaultPdfTemplate || 'elegant'
         const dueDays = settings.defaultDueDays ?? 30
 
         if (cancelled) return

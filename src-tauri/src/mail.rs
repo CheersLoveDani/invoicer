@@ -33,8 +33,21 @@ pub struct OutgoingEmail {
     to: String,
     subject: String,
     body: String,
+    /// A styled version of `body`; mail apps that cannot show it fall back to the text.
+    html: Option<String>,
+    /// Images the HTML refers to as "cid:<cid>", such as the logo.
+    #[serde(default)]
+    inline_images: Vec<InlineImage>,
     attachment_name: Option<String>,
     attachment_base64: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InlineImage {
+    cid: String,
+    content_type: String,
+    base64: String,
 }
 
 fn keychain_entry(username: &str) -> Result<keyring::Entry, String> {
@@ -122,14 +135,26 @@ pub async fn smtp_send(config: SmtpConfig, email: OutgoingEmail) -> Result<(), S
     }
 
     let text = SinglePart::plain(email.body);
+    let content = match email.html {
+        Some(html) => {
+            let mut related = MultiPart::related().singlepart(SinglePart::html(html));
+            for image in email.inline_images {
+                let bytes = STANDARD.decode(image.base64).map_err(|e| e.to_string())?;
+                let kind = ContentType::parse(&image.content_type).map_err(|e| e.to_string())?;
+                related = related.singlepart(Attachment::new_inline(image.cid).body(bytes, kind));
+            }
+            MultiPart::alternative().singlepart(text).multipart(related)
+        }
+        None => MultiPart::mixed().singlepart(text),
+    };
     let message = match (email.attachment_name, email.attachment_base64) {
         (Some(name), Some(data)) => {
             let bytes = STANDARD.decode(data).map_err(|e| e.to_string())?;
             let pdf_type = ContentType::parse("application/pdf").map_err(|e| e.to_string())?;
             let pdf = Attachment::new(name).body(bytes, pdf_type);
-            builder.multipart(MultiPart::mixed().singlepart(text).singlepart(pdf))
+            builder.multipart(MultiPart::mixed().multipart(content).singlepart(pdf))
         }
-        _ => builder.singlepart(text),
+        _ => builder.multipart(content),
     }
     .map_err(|e| e.to_string())?;
 

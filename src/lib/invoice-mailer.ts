@@ -4,7 +4,9 @@ import { clientService, db, invoiceService, profileService, settingsService } fr
 import { InvoicePdfDocument } from '@/components/pdf/pdf-document'
 import { generateEmailContent, type EmailContent } from '@/lib/email-utils'
 import { invoicePdfFilename, invoicePdfProps } from '@/lib/invoice-pdf'
-import { isMailConfigured, mail } from '@/lib/native/mail'
+import { isMailConfigured, mail, type OutgoingEmail } from '@/lib/native/mail'
+import { renderInvoiceEmailHtml, type EmailInvoice } from '@/lib/email-html'
+import { logoAsPng } from '@/lib/logo-image'
 import type { Invoice, InvoiceOutbox } from '@/types'
 
 /** The email for an invoice, using its client's own wording when they have one. */
@@ -25,6 +27,25 @@ export async function invoiceEmailContent(invoice: Invoice): Promise<EmailConten
       ? { emailSubject: client.emailSubject, emailBody: client.emailBody }
       : undefined,
   )
+}
+
+const LOGO_CID = 'logo'
+
+export function renderInvoicePdf(invoice: Parameters<typeof invoicePdfProps>[0], logo: string | undefined): Promise<Blob> {
+  return pdf(createElement(InvoicePdfDocument, invoicePdfProps(invoice, logo))).toBlob()
+}
+
+/** The styled email parts: HTML and the logo it shows. */
+export async function styledEmail(
+  invoice: EmailInvoice,
+  body: string,
+  logo: string | undefined,
+): Promise<Pick<OutgoingEmail, 'html' | 'inlineImages'>> {
+  const png = await logoAsPng(logo)
+  return {
+    html: renderInvoiceEmailHtml({ invoice, body, logoSrc: png ? `cid:${LOGO_CID}` : undefined }),
+    inlineImages: png ? [{ cid: LOGO_CID, data: png }] : [],
+  }
 }
 
 export function errorMessage(err: unknown): string {
@@ -66,9 +87,10 @@ export async function deliverInvoice(invoice: Invoice): Promise<void> {
   }
 
   const content = await invoiceEmailContent(invoice)
-  const pdfBlob = await pdf(createElement(InvoicePdfDocument, invoicePdfProps(invoice, profile.logo))).toBlob()
+  const pdfBlob = await renderInvoicePdf(invoice, profile.logo)
   await mail.send({ ...settings.smtp, fromName: settings.smtp.fromName.trim() || invoice.from.name }, {
     ...content,
+    ...(await styledEmail(invoice, content.body, profile.logo)),
     attachment: { name: invoicePdfFilename(invoice), data: pdfBlob },
   })
 

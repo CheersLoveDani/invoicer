@@ -1,11 +1,12 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { motion } from 'motion/react'
-import { LayoutDashboard, FileText, Plus, Users, Settings, Download } from 'lucide-react'
+import { LayoutDashboard, FileText, Plus, Users, Settings, Download, CalendarClock } from 'lucide-react'
 import { db } from '@/db'
 import { cn } from '@/lib/utils'
 import { openNewInvoice } from '@/components/invoice/new-invoice-dialog'
 import { isOverdue } from '@/lib/invoice-amounts'
+import { MAX_ATTEMPTS } from '@/lib/auto-send'
 import { APP_VERSION, updater, useUpdateState } from '@/lib/native/updater'
 
 interface NavItem {
@@ -17,6 +18,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Invoices', href: '/invoices', icon: FileText },
+  { label: 'Scheduled', href: '/scheduled', icon: CalendarClock },
   { label: 'Clients & templates', href: '/clients', icon: Users },
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
@@ -35,7 +37,7 @@ function SidebarNavItem({
 }: {
   item: NavItem
   active: boolean
-  count?: number
+  count?: { value: number; title: string }
   onClick?: () => void
 }) {
   return (
@@ -65,13 +67,13 @@ function SidebarNavItem({
         )}
       />
       <span className="relative truncate">{item.label}</span>
-      {count ? (
+      {count?.value ? (
         <span
-          key={count}
-          title={`${count} overdue`}
+          key={count.value}
+          title={count.title}
           className="relative ml-auto flex h-5 min-w-5 animate-pop items-center justify-center rounded-full bg-warning px-1.5 text-[11px] font-semibold text-warning-foreground tabular dark:text-warning-foreground"
         >
-          {count}
+          {count.value}
         </span>
       ) : null}
     </NavLink>
@@ -85,6 +87,14 @@ export function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
     const sent = await db.invoices.where('status').equals('sent').toArray()
     return sent.filter((inv) => isOverdue(inv)).length
   })
+  // Invoices waiting for approval, or that stopped retrying
+  const needsYou = useLiveQuery(() =>
+    db.invoices
+      .where('status')
+      .equals('draft')
+      .filter((inv) => inv.outbox?.state === 'awaiting-approval' || (inv.outbox?.state === 'failed' && inv.outbox.attempts >= MAX_ATTEMPTS))
+      .count(),
+  )
 
   return (
     <div className="flex h-full flex-col">
@@ -125,7 +135,13 @@ export function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
             key={item.href}
             item={item}
             active={isActive(item.href, pathname)}
-            count={item.href === '/invoices' ? overdue : undefined}
+            count={
+              item.href === '/invoices'
+                ? { value: overdue ?? 0, title: `${overdue} overdue` }
+                : item.href === '/scheduled'
+                  ? { value: needsYou ?? 0, title: `${needsYou} waiting for you` }
+                  : undefined
+            }
             onClick={onNavClick}
           />
         ))}

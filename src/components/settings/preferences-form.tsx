@@ -23,6 +23,7 @@ const THEMES: { value: Theme; label: string }[] = [
 ]
 
 const PDF_TEMPLATES: { value: PdfTemplate; label: string }[] = [
+  { value: 'elegant', label: 'Elegant' },
   { value: 'clean', label: 'Clean' },
   { value: 'modern', label: 'Modern' },
   { value: 'compact', label: 'Compact' },
@@ -37,7 +38,7 @@ export function PreferencesForm() {
     {
       theme: 'system',
       defaultDueDays: 30,
-      defaultPdfTemplate: 'clean',
+      defaultPdfTemplate: 'elegant',
       backupReminderDays: 30,
     }
   )

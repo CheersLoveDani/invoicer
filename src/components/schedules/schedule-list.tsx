@@ -240,7 +240,7 @@ function ScheduleCard({ schedule, index }: { schedule: Schedule; index: number }
 export function ScheduleList() {
   const [createOpen, setCreateOpen] = useState(false)
 
-  const schedules = useLiveQuery(() => db.schedules.toArray())
+  const schedules = useLiveQuery(() => db.schedules.orderBy('nextDueDate').toArray())
 
   return (
     <div className="space-y-6">
@@ -262,7 +262,7 @@ export function ScheduleList() {
           <CalendarClock className="mb-4 size-12 text-muted-foreground/50" />
           <h3 className="text-[15px] font-semibold">No schedules yet</h3>
           <p className="mt-1 max-w-sm text-center text-sm text-muted-foreground">
-            A schedule reminds you when a repeat invoice is due and fills it in from a template.
+            A schedule fills in a repeat invoice from a template when it is due, and can email it for you.
           </p>
           <Button className="mt-4" onClick={() => setCreateOpen(true)}>
             <Plus className="size-4" />

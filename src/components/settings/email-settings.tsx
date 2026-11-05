@@ -4,7 +4,8 @@ import { toast } from 'sonner'
 import { ExternalLink, Loader2, Save, Send, Trash2 } from 'lucide-react'
 import { db, profileService, settingsService } from '@/db'
 import { GMAIL_DEFAULTS, mail, smtpLogin } from '@/lib/native/mail'
-import { errorMessage } from '@/lib/invoice-mailer'
+import { errorMessage, renderInvoicePdf, styledEmail } from '@/lib/invoice-mailer'
+import { addDays } from 'date-fns'
 import { isTauri } from '@/lib/runtime'
 import type { SmtpSecurity, SmtpSettings } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -145,10 +146,42 @@ export function EmailSettings() {
     setBusy('test')
     try {
       if (!(await persist())) return
-      await mail.send({ ...form, fromName: form.fromName.trim() || profileName || '' }, {
+      const [profile, settings] = await Promise.all([profileService.get(), settingsService.get()])
+      const sender = form.fromName.trim() || profile.name || ''
+      const today = new Date()
+      const sample = {
+        invoiceNumber: 'TEST0001',
+        title: 'Sample work (this is a test)',
+        date: today,
+        dueDate: addDays(today, 30),
+        from: { name: sender, email: form.fromEmail.trim(), address: profile.address, phone: profile.phone },
+        to: { name: 'ACME Ltd', email: '', address: '', phone: '' },
+        lineItems: [
+          { id: 'sample-1', type: 'fixed' as const, description: 'Website design', price: 950 },
+          { id: 'sample-2', type: 'hourly' as const, description: 'Content updates', rate: 50, hours: 5, price: 250 },
+        ],
+        expenses: [{ id: 'sample-3', type: 'expense' as const, description: 'Stock photos', price: 50 }],
+        notes: 'This is a test invoice from Invoicer. Nothing is owed.',
+        pdfTemplate: settings.defaultPdfTemplate || 'elegant',
+        currency: profile.defaultCurrency || 'GBP',
+        paymentDetails: {
+          bankAccountName: profile.bankAccountName,
+          bankName: profile.bankName,
+          bankSortCode: profile.bankSortCode,
+          bankAccountNumber: profile.bankAccountNumber,
+          reference: 'TEST0001',
+        },
+      }
+      const body = `This is a test from Invoicer, showing how your invoice emails will look. The amounts are made up, and a sample invoice is attached.
+
+Kind regards,
+${sender}`
+      await mail.send({ ...form, fromName: sender }, {
         to: testTo.trim() || form.fromEmail.trim(),
         subject: 'Invoicer test email',
-        body: 'This is a test from Invoicer. If you can read it, Invoicer can send your invoices from this account.',
+        body,
+        ...(await styledEmail(sample, body, profile.logo)),
+        attachment: { name: 'Invoice-TEST0001.pdf', data: await renderInvoicePdf(sample, profile.logo) },
       })
       toast.success(`Test email sent to ${testTo.trim() || form.fromEmail.trim()}`)
     } catch (err) {
@@ -305,7 +338,7 @@ export function EmailSettings() {
 
       <Section
         title="Scheduled sending"
-        description="Choose what each schedule does when it is due under Clients & templates, Schedules."
+        description="Choose what each schedule does when it is due on the Scheduled page."
       >
         <BackgroundToggle />
       </Section>

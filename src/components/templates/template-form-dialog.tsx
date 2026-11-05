@@ -52,7 +52,7 @@ const initialFormData: TemplateFormData = {
   expenses: [],
   notes: '',
   paymentReference: '',
-  pdfTemplate: 'clean',
+  pdfTemplate: 'elegant',
 }
 
 export function TemplateFormDialog({
@@ -256,6 +256,7 @@ export function TemplateFormDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="elegant">Elegant</SelectItem>
                     <SelectItem value="clean">Clean</SelectItem>
                     <SelectItem value="modern">Modern</SelectItem>
                     <SelectItem value="compact">Compact</SelectItem>

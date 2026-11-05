@@ -4,6 +4,7 @@ import DashboardPage from '@/pages/dashboard'
 import InvoicesPage from '@/pages/invoices'
 import InvoiceEditorPage from '@/pages/invoice-editor'
 import ClientsPage from '@/pages/clients'
+import ScheduledPage from '@/pages/scheduled'
 import SettingsPage from '@/pages/settings'
 
 // A data router, so the editor can hold navigation while there are unsaved changes
@@ -16,6 +17,7 @@ const router = createBrowserRouter([
       { path: '/invoices', element: <InvoicesPage /> },
       { path: '/invoices/new', element: <InvoiceEditorPage /> },
       { path: '/invoices/:id', element: <InvoiceEditorPage /> },
+      { path: '/scheduled', element: <ScheduledPage /> },
       { path: '/clients', element: <ClientsPage /> },
       { path: '/settings', element: <SettingsPage /> },
       { path: '*', element: <Navigate to="/dashboard" replace /> },

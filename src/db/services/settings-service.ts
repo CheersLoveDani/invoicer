@@ -7,7 +7,7 @@ const defaultSettings: AppSettings = {
   id: SETTINGS_ID,
   theme: 'system',
   defaultDueDays: 30,
-  defaultPdfTemplate: 'clean',
+  defaultPdfTemplate: 'elegant',
   backupReminderDays: 30,
 }
 

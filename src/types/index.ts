@@ -22,7 +22,7 @@ export interface LineItem {
 
 export type InvoiceStatus = 'draft' | 'sent' | 'paid'
 
-export type PdfTemplate = 'clean' | 'modern' | 'compact'
+export type PdfTemplate = 'elegant' | 'clean' | 'modern' | 'compact'
 
 export type ScheduleFrequency = 'weekly' | 'monthly' | 'custom'
 

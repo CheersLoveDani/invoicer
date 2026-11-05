@@ -48,7 +48,7 @@ Computed at runtime, not stored, by `isOverdue()` in `src/lib/invoice-amounts.ts
 `src/db/services/invoice-numbering.ts`. Opening an invoice reserves nothing: the suggested number is one after the client's last *sent or paid* invoice (or `client.nextInvoiceNumber` if higher), skipping numbers held by other invoices such as drafts. `client.nextInvoiceNumber` only moves on when an invoice is sent or paid (`clientService.recordNumberUsed`). Invoices store `clientId`; older ones are matched by prefix.
 
 ### PDF Templates
-Three styles built with @react-pdf/renderer: Clean (minimal), Modern (accent color), Compact (dense). All support logo, currency formatting, work items + expenses sections.
+Four styles built with @react-pdf/renderer: Elegant (default; navy header, gold accents, matches the invoice email in `src/lib/email-html.ts`, colours in `src/lib/elegant-theme.ts`), Clean (minimal), Modern (accent color), Compact (dense). All support logo, currency formatting, work items + expenses sections.
 
 ### Email Flow
 The send dialog opens a pre-filled `mailto:` draft (via `@tauri-apps/plugin-opener` in the desktop app) and shows copyable fields. Draggable PDF card for drag-to-email attachment (HTML5 Drag API with DownloadURL).
@@ -59,13 +59,14 @@ The send dialog opens a pre-filled `mailto:` draft (via `@tauri-apps/plugin-open
 ### Desktop Updates
 `src/lib/native/updater.ts` uses `@tauri-apps/plugin-updater`: checks on launch and every 6 hours, downloads in the background, and only installs (restarts) when the user clicks Restart. Releases are built by `.github/workflows/release.yml` on a `v*` tag; update bundles are signed with the `TAURI_SIGNING_PRIVATE_KEY` repo secret (public key in `tauri.conf.json`). The app version comes from `package.json`.
 
-## App Structure (5 pages)
+## App Structure (6 pages)
 
 1. **Dashboard** — stats cards, notification panel, calendar view, earnings/client charts, recent activity
 2. **Invoices** — filterable/sortable table with bulk actions
 3. **Create/Edit Invoice** — two-panel: form (left) + live PDF preview (right)
-4. **Clients & Templates** — client cards, template CRUD
-5. **Settings** — profile, preferences, data export/import
+4. **Scheduled** — invoices waiting for approval or that failed to send, plus recurring schedules
+5. **Clients & Templates** — client cards, template CRUD
+6. **Settings** — profile, preferences, email, data export/import, updates
 
 ## Conventions
 

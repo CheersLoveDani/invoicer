@@ -2,6 +2,7 @@ import { CleanTemplate } from './pdf-clean'
 import type { PdfTemplateProps } from './pdf-clean'
 import { ModernTemplate } from './pdf-modern'
 import { CompactTemplate } from './pdf-compact'
+import { ElegantTemplate } from './pdf-elegant'
 import type { PdfTemplate } from '@/types'
 
 interface Props extends PdfTemplateProps {
@@ -14,6 +15,8 @@ export function InvoicePdfDocument({ template, ...props }: Props) {
       return <ModernTemplate {...props} />
     case 'compact':
       return <CompactTemplate {...props} />
+    case 'elegant':
+      return <ElegantTemplate {...props} />
     default:
       return <CleanTemplate {...props} />
   }
