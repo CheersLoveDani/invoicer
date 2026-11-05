@@ -53,6 +53,9 @@ Three styles built with @react-pdf/renderer: Clean (minimal), Modern (accent col
 ### Email Flow
 The send dialog opens a pre-filled `mailto:` draft (via `@tauri-apps/plugin-opener` in the desktop app) and shows copyable fields. Draggable PDF card for drag-to-email attachment (HTML5 Drag API with DownloadURL).
 
+### Sending From the App (desktop only)
+`src-tauri/src/mail.rs` sends over SMTP (`lettre`) from the user's own account, Gmail with an app password by default. The password is stored in the OS keychain (`keyring`) and never returned to the web view; the rest of the account lives in `AppSettings.smtp` (Settings → Email). Each schedule has a `sendMode`: `remind` (old behaviour), `approve` (makes a draft that waits for approval) or `auto` (makes and sends it). `src/lib/auto-send.ts` runs every minute from `OutboxWorker`: it makes due invoices, then sends invoices whose `outbox.state` is `queued` (failed sends retry up to 3 times). `claimForSending` in `src/lib/invoice-mailer.ts` sets `sending` in a transaction so nothing is sent twice; a send cut off part way is never retried automatically. "Run in the background" (`src-tauri/src/background.rs`) turns on start-at-sign-in (`--minimized`), a tray icon and close-to-tray; the main window starts hidden and is shown in `setup` unless minimized. Single-instance stops a second copy running the outbox.
+
 ### Desktop Updates
 `src/lib/native/updater.ts` uses `@tauri-apps/plugin-updater`: checks on launch and every 6 hours, downloads in the background, and only installs (restarts) when the user clicks Restart. Releases are built by `.github/workflows/release.yml` on a `v*` tag; update bundles are signed with the `TAURI_SIGNING_PRIVATE_KEY` repo secret (public key in `tauri.conf.json`). The app version comes from `package.json`.
 

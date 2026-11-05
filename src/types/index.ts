@@ -28,6 +28,34 @@ export type ScheduleFrequency = 'weekly' | 'monthly' | 'custom'
 
 export type Theme = 'light' | 'dark' | 'system'
 
+/** What a schedule does when it falls due. Missing means 'remind'. */
+export type ScheduleSendMode = 'remind' | 'approve' | 'auto'
+
+export type OutboxState = 'awaiting-approval' | 'queued' | 'sending' | 'failed'
+
+/** An invoice waiting to be emailed by the app itself. */
+export interface InvoiceOutbox {
+  state: OutboxState
+  scheduleId?: string
+  attempts: number
+  error?: string
+  /** Milliseconds since 1970, so backups restore it without date parsing. */
+  lastAttemptAt?: number
+}
+
+export type SmtpSecurity = 'tls' | 'starttls'
+
+/** The mail account invoices are sent from. The password is kept in the OS keychain. */
+export interface SmtpSettings {
+  fromEmail: string
+  fromName: string
+  host: string
+  port: number
+  security: SmtpSecurity
+  /** The login, when it differs from fromEmail. */
+  username: string
+}
+
 export interface UserProfile {
   id: string // always "user-profile" singleton
   name: string
@@ -106,6 +134,7 @@ export interface Invoice {
   createdAt: Date
   sentAt?: Date
   paidAt?: Date
+  outbox?: InvoiceOutbox
 }
 
 export interface Schedule {
@@ -117,6 +146,7 @@ export interface Schedule {
   nextDueDate: Date
   lastGeneratedDate?: Date
   active: boolean
+  sendMode?: ScheduleSendMode
 }
 
 export interface AppSettings {
@@ -126,4 +156,7 @@ export interface AppSettings {
   defaultPdfTemplate: PdfTemplate
   lastBackupDate?: Date
   backupReminderDays: number
+  smtp?: SmtpSettings
+  /** Start at sign-in and stay in the tray, so scheduled emails go out. Desktop only. */
+  runInBackground?: boolean
 }

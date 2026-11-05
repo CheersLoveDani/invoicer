@@ -2,7 +2,7 @@ import { v4 as uuid } from 'uuid'
 import { db } from '@/db/database'
 import { clientService } from '@/db/services/client-service'
 import { invoiceTotal, isOverdue } from '@/lib/invoice-amounts'
-import type { Currency, Invoice, InvoiceStatus } from '@/types'
+import type { Currency, Invoice, InvoiceOutbox, InvoiceStatus } from '@/types'
 
 async function recordUsed(id: string): Promise<void> {
   const invoice = await db.invoices.get(id)
@@ -59,6 +59,12 @@ export const invoiceService = {
       sentAt: new Date(),
     })
     await recordUsed(id)
+  },
+
+  /** Puts the invoice in, or (with undefined) takes it out of, the app's own outbox. */
+  async setOutbox(id: string, outbox: InvoiceOutbox | undefined): Promise<void> {
+    // Dexie removes a property that is updated to undefined
+    await db.invoices.update(id, { outbox })
   },
 
   async markPaid(id: string): Promise<void> {

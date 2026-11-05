@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Copy, Mail, Send } from 'lucide-react'
+import { Check, Copy, Loader2, Mail, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,6 +25,8 @@ interface SendInvoiceDialogProps {
   description?: string
   /** Shown when the email is for an invoice that should be recorded as sent. */
   onConfirmSend?: () => void
+  /** Sends the email with the PDF from the user's own account (desktop, once set up). */
+  onSendNow?: () => Promise<void>
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -68,7 +70,20 @@ export function SendInvoiceDialog({
   title = 'Email the invoice',
   description = 'Open a ready-made draft in your mail app, or copy the parts you need. Drag the PDF card onto the draft to attach it.',
   onConfirmSend,
+  onSendNow,
 }: SendInvoiceDialogProps) {
+  const [sending, setSending] = useState(false)
+
+  async function handleSendNow() {
+    if (!onSendNow) return
+    setSending(true)
+    try {
+      await onSendNow()
+    } finally {
+      setSending(false)
+    }
+  }
+
   async function handleOpenMail() {
     try {
       await openEmailDraft({ to: recipientEmail, subject, body })
@@ -83,7 +98,11 @@ export function SendInvoiceDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <DialogDescription>
+            {onSendNow
+              ? 'Send it now from your email account with the PDF attached, or open a draft in your mail app instead.'
+              : description}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -113,11 +132,16 @@ export function SendInvoiceDialog({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={handleOpenMail} disabled={!recipientEmail}>
+          <Button variant="outline" onClick={handleOpenMail} disabled={!recipientEmail || sending}>
             <Mail />
             Open in mail app
           </Button>
-          {onConfirmSend ? (
+          {onSendNow ? (
+            <Button onClick={handleSendNow} disabled={!recipientEmail || sending}>
+              {sending ? <Loader2 className="animate-spin" /> : <Send />}
+              Send now
+            </Button>
+          ) : onConfirmSend ? (
             <Button onClick={onConfirmSend}>
               <Send />
               Mark as sent

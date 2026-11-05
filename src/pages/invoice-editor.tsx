@@ -5,13 +5,16 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { pdf } from '@react-pdf/renderer'
 import { toast } from 'sonner'
 import { useInvoiceForm } from '@/hooks/use-invoice-form'
-import { invoiceService, clientService, profileService } from '@/db'
+import { db, invoiceService, clientService, profileService, settingsService } from '@/db'
 import { generateEmailContent, type EmailContent } from '@/lib/email-utils'
 import { invoicePdfFilename, invoicePdfProps } from '@/lib/invoice-pdf'
 import { InvoiceForm } from '@/components/invoice/invoice-form'
 import { InvoiceActions } from '@/components/invoice/invoice-actions'
 import { PdfDragCard } from '@/components/invoice/pdf-drag-card'
 import { SendInvoiceDialog } from '@/components/invoice/send-invoice-dialog'
+import { OutboxBanner } from '@/components/invoice/outbox-banner'
+import { errorMessage, sendInvoiceNow } from '@/lib/invoice-mailer'
+import { isMailConfigured } from '@/lib/native/mail'
 import { InvoiceStatusBadge } from '@/components/invoices/invoice-status-badge'
 import { PdfPreview } from '@/components/pdf/pdf-preview'
 import { InvoicePdfDocument } from '@/components/pdf/pdf-document'
@@ -32,6 +35,7 @@ export default function InvoiceEditorPage() {
   const invoiceForm = useInvoiceForm()
   const { form, save, markSent, isLoading, mode, isDirty, hasUnsavedChanges } = invoiceForm
   const logo = useLiveQuery(async () => (await profileService.get()).logo)
+  const canSendDirect = useLiveQuery(async () => isMailConfigured((await settingsService.get()).smtp)) ?? false
 
   const [showPreview, setShowPreview] = useState(false)
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null)
@@ -41,6 +45,15 @@ export default function InvoiceEditorPage() {
   const [savedInvoiceId, setSavedInvoiceId] = useState<string | null>(null)
 
   const isNew = mode !== 'edit'
+
+  // The saved copy, to follow the app's own outbox while this invoice is open
+  const liveId = id ?? savedInvoiceId ?? undefined
+  const stored = useLiveQuery(async () => (liveId ? db.invoices.get(liveId) : undefined), [liveId])
+
+  // Sent in the background while open: keep the form in step, so saving does not undo it
+  useEffect(() => {
+    if (stored && stored.status !== 'draft' && form.status === 'draft') markSent()
+  }, [stored, form.status, markSent])
 
   // The page stays mounted between invoices; a PDF made for one must not be offered for the next.
   // A just-created invoice (new -> its own id) keeps its card.
@@ -161,6 +174,22 @@ export default function InvoiceEditorPage() {
     }
   }, [savedInvoiceId, markSent, form.invoiceNumber])
 
+  const handleSendNow = useCallback(async () => {
+    if (!savedInvoiceId) return
+    try {
+      await sendInvoiceNow(savedInvoiceId)
+      markSent()
+      toast.success(`${form.invoiceNumber || 'Invoice'} sent to ${form.to.email}`)
+      setSendDialogOpen(false)
+    } catch (err) {
+      toast.error(errorMessage(err))
+    }
+  }, [savedInvoiceId, markSent, form.invoiceNumber, form.to.email])
+
+  const saveIfChanged = useCallback(async () => {
+    if (hasUnsavedChanges()) await save()
+  }, [hasUnsavedChanges, save])
+
   if (isLoading && !savedInvoiceId) {
     return (
       <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -189,6 +218,17 @@ export default function InvoiceEditorPage() {
           {showPreview ? 'Edit' : 'Preview'}
         </Button>
       </div>
+
+      {stored?.outbox && stored.status === 'draft' && (
+        <OutboxBanner
+          invoiceId={stored.id}
+          invoiceNumber={form.invoiceNumber}
+          recipient={form.to.email}
+          outbox={stored.outbox}
+          beforeSend={saveIfChanged}
+          onSent={markSent}
+        />
+      )}
 
       <div className="flex min-h-0 flex-1">
         <div className={cn('min-w-0 flex-[3] overflow-y-auto', showPreview && 'hidden lg:block')}>
@@ -223,6 +263,7 @@ export default function InvoiceEditorPage() {
           subject={emailContent.subject}
           body={emailContent.body}
           onConfirmSend={form.status === 'draft' ? handleConfirmSend : undefined}
+          onSendNow={canSendDirect ? handleSendNow : undefined}
         />
       )}
 

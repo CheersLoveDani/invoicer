@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Bell, AlertTriangle, CalendarClock, DatabaseBackup, X } from 'lucide-react'
+import { Bell, AlertTriangle, CalendarClock, DatabaseBackup, MailCheck, MailWarning, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useNotifications, type Notification } from '@/hooks/use-notifications'
@@ -9,6 +9,8 @@ const ICONS = {
   overdue: { icon: AlertTriangle, className: 'bg-warning/12 text-warning' },
   'schedule-due': { icon: CalendarClock, className: 'bg-info/10 text-info' },
   'backup-reminder': { icon: DatabaseBackup, className: 'bg-muted text-muted-foreground' },
+  approval: { icon: MailCheck, className: 'bg-info/10 text-info' },
+  'send-failed': { icon: MailWarning, className: 'bg-destructive/10 text-destructive' },
 } as const
 
 function NotificationRow({

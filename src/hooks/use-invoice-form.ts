@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
-import { addDays, addWeeks, addMonths } from 'date-fns'
+import { addDays } from 'date-fns'
 import { toast } from 'sonner'
 import {
   profileService,
@@ -19,8 +19,9 @@ import type {
   InvoicePaymentDetails,
   LineItem,
   PdfTemplate,
-  Schedule,
 } from '@/types'
+import { invoiceFromTemplate } from '@/lib/invoice-from-template'
+import { nextScheduleDate } from '@/lib/schedule-dates'
 
 export type InvoiceFormMode = 'blank' | 'template' | 'client' | 'duplicate' | 'edit'
 
@@ -72,26 +73,6 @@ const emptyPayment: InvoicePaymentDetails = {
   bankSortCode: '',
   bankName: '',
   reference: '',
-}
-
-/** The schedule's next date after `from`, a whole number of intervals on from `due`. */
-export function nextScheduleDate(
-  due: Date,
-  frequency: Schedule['frequency'],
-  customIntervalDays: number | undefined,
-  from: Date,
-): Date {
-  // Counting each step from the original date keeps a schedule on the 31st
-  // on month ends instead of drifting to the 28th after February
-  const step = (n: number) =>
-    frequency === 'weekly'
-      ? addWeeks(due, n)
-      : frequency === 'custom'
-        ? addDays(due, n * Math.max(1, customIntervalDays ?? 14))
-        : addMonths(due, n)
-  let n = 1
-  while (step(n) <= from) n++
-  return step(n)
 }
 
 /**
@@ -264,29 +245,7 @@ export function useInvoiceForm(): UseInvoiceFormReturn {
               }
             }
 
-            setForm({
-              ...createBlankForm(),
-              title: template.title,
-              invoiceNumber,
-              from: fromSnapshot,
-              to: client
-                ? { name: client.name, email: client.email, address: client.address, phone: '' }
-                : { ...emptyFrom },
-              lineItems: template.lineItems.map((li) => ({ ...li, id: uuid() })),
-              expenses: template.expenses.map((li) => ({ ...li, id: uuid() })),
-              notes: template.notes,
-              paymentDetails: {
-                ...paymentDetails,
-                reference: template.paymentReference
-                  ? template.paymentReference.replace(/\{number\}/g, invoiceNumber)
-                  : invoiceNumber,
-              },
-              currency: baseCurrency,
-              pdfTemplate: template.pdfTemplate,
-              templateId: template.id,
-              clientId: client?.id,
-              dueDate: addDays(new Date(), dueDays),
-            })
+            setForm(invoiceFromTemplate(template, { client, profile, settings, invoiceNumber }))
           }
         } else if (mode === 'client' && clientParam) {
           const client = await clientService.getById(clientParam)

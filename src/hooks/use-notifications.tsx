@@ -5,11 +5,12 @@ import { db } from '@/db'
 import { scheduleService, settingsService } from '@/db'
 import { isOverdue } from '@/lib/invoice-amounts'
 import { nativeNotify } from '@/lib/native/notify'
+import { MAX_ATTEMPTS, sendModeOf } from '@/lib/auto-send'
 
 export interface Notification {
   /** Stable for one occurrence: a schedule's next cycle gets a new id. */
   id: string
-  type: 'schedule-due' | 'overdue' | 'backup-reminder'
+  type: 'schedule-due' | 'overdue' | 'backup-reminder' | 'approval' | 'send-failed'
   message: string
   actionLabel: string
   actionUrl?: string
@@ -44,15 +45,43 @@ async function computeNotifications(): Promise<Notification[]> {
   const result: Notification[] = []
   const now = new Date()
 
-  const [dueSoon, clients, templates, sent, settings] = await Promise.all([
+  const [dueSoon, clients, templates, sent, outbox, settings] = await Promise.all([
     scheduleService.getDueSoon(3),
     db.clients.toArray(),
     db.templates.toArray(),
     db.invoices.where('status').equals('sent').toArray(),
+    db.invoices.where('status').equals('draft').filter((inv) => !!inv.outbox).toArray(),
     settingsService.get(),
   ])
 
+  for (const invoice of outbox) {
+    const box = invoice.outbox!
+    const label = invoice.invoiceNumber || 'An invoice'
+    const to = invoice.to.name || 'a client'
+    if (box.state === 'awaiting-approval') {
+      result.push({
+        id: `approval-${invoice.id}`,
+        type: 'approval',
+        message: `${label} for ${to} is ready to send`,
+        actionLabel: 'Review',
+        actionUrl: `/invoices/${invoice.id}`,
+        invoiceId: invoice.id,
+      })
+    } else if (box.state === 'failed' && box.attempts >= MAX_ATTEMPTS) {
+      result.push({
+        id: `send-failed-${invoice.id}-${box.lastAttemptAt ?? 0}`,
+        type: 'send-failed',
+        message: `${label} to ${to} was not sent. ${box.error ?? ''}`.trim(),
+        actionLabel: 'Open',
+        actionUrl: `/invoices/${invoice.id}`,
+        invoiceId: invoice.id,
+      })
+    }
+  }
+
   for (const schedule of dueSoon) {
+    // These make their own invoice when due
+    if (sendModeOf(schedule) !== 'remind') continue
     const client = clients.find((c) => c.id === schedule.clientId)
     const template = templates.find((t) => t.id === schedule.templateId)
     if (!client || !template) continue

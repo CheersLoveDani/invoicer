@@ -34,7 +34,9 @@ import {
   Trash2,
   User,
   FileText,
+  Mail,
 } from 'lucide-react'
+import { sendModeOf } from '@/lib/auto-send'
 
 function FrequencyLabel({ schedule }: { schedule: Schedule }) {
   switch (schedule.frequency) {
@@ -171,6 +173,12 @@ function ScheduleCard({ schedule, index }: { schedule: Schedule; index: number }
               <Clock className="size-3.5" />
               <span><FrequencyLabel schedule={schedule} /></span>
             </div>
+            {sendModeOf(schedule) !== 'remind' && (
+              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Mail className="size-3.5" />
+                <span>{sendModeOf(schedule) === 'auto' ? 'Sends automatically' : 'Asks before sending'}</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">

@@ -1,14 +1,15 @@
 import { useSearchParams } from 'react-router-dom'
-import { Download, Loader2, RefreshCw, User, SlidersHorizontal, Database, Sparkles } from 'lucide-react'
+import { Download, Loader2, RefreshCw, User, SlidersHorizontal, Database, Sparkles, Mail } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { ProfileForm } from '@/components/settings/profile-form'
 import { PreferencesForm } from '@/components/settings/preferences-form'
 import { DataManagement } from '@/components/settings/data-management'
+import { EmailSettings } from '@/components/settings/email-settings'
 import { PageHeader } from '@/components/layout/page-header'
 import { APP_VERSION, updater, useUpdateState, type UpdateStatus } from '@/lib/native/updater'
 
-const TABS = ['profile', 'preferences', 'data', 'updates'] as const
+const TABS = ['profile', 'preferences', 'email', 'data', 'updates'] as const
 type Tab = (typeof TABS)[number]
 
 function Panel({ children }: { children: React.ReactNode }) {
@@ -70,7 +71,7 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <PageHeader title="Settings" description="Your details, defaults, backups and updates." />
+      <PageHeader title="Settings" description="Your details, defaults, email, backups and updates." />
 
       <Tabs value={tab} onValueChange={(value) => setParams({ tab: value }, { replace: true })}>
         <TabsList>
@@ -81,6 +82,10 @@ export default function SettingsPage() {
           <TabsTrigger value="preferences">
             <SlidersHorizontal />
             Preferences
+          </TabsTrigger>
+          <TabsTrigger value="email">
+            <Mail />
+            Email
           </TabsTrigger>
           <TabsTrigger value="data">
             <Database />
@@ -100,6 +105,11 @@ export default function SettingsPage() {
         <TabsContent value="preferences" className="mt-5 animate-page">
           <Panel>
             <PreferencesForm />
+          </Panel>
+        </TabsContent>
+        <TabsContent value="email" className="mt-5 animate-page">
+          <Panel>
+            <EmailSettings />
           </Panel>
         </TabsContent>
         <TabsContent value="data" className="mt-5 animate-page">

@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { scheduleService, clientService, templateService } from '@/db'
-import type { Schedule, ScheduleFrequency } from '@/types'
+import { scheduleService, clientService, templateService, settingsService } from '@/db'
+import type { Schedule, ScheduleFrequency, ScheduleSendMode } from '@/types'
+import { isMailConfigured } from '@/lib/native/mail'
+import { isTauri } from '@/lib/runtime'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -45,7 +47,14 @@ interface ScheduleFormData {
   customIntervalDays: number
   nextDueDate: Date
   active: boolean
+  sendMode: ScheduleSendMode
 }
+
+const SEND_MODES: { value: ScheduleSendMode; label: string; hint: string }[] = [
+  { value: 'remind', label: 'Remind me to make the invoice', hint: 'You make and send it yourself.' },
+  { value: 'approve', label: 'Make it and ask me before sending', hint: 'The invoice is made as a draft, and you are asked to check it and send it.' },
+  { value: 'auto', label: 'Make it and send it automatically', hint: 'The invoice is made and emailed to the client without asking.' },
+]
 
 const initialFormData: ScheduleFormData = {
   clientId: '',
@@ -54,6 +63,7 @@ const initialFormData: ScheduleFormData = {
   customIntervalDays: 14,
   nextDueDate: new Date(),
   active: true,
+  sendMode: 'remind',
 }
 
 export function ScheduleFormDialog({
@@ -67,6 +77,8 @@ export function ScheduleFormDialog({
   const [datePickerOpen, setDatePickerOpen] = useState(false)
 
   const clients = useLiveQuery(() => clientService.getAll())
+  const settings = useLiveQuery(() => settingsService.get())
+  const canSend = isMailConfigured(settings?.smtp)
 
   // The client's own templates, plus any not tied to a client
   const templates = useLiveQuery(
@@ -87,6 +99,7 @@ export function ScheduleFormDialog({
           customIntervalDays: schedule.customIntervalDays ?? 14,
           nextDueDate: new Date(schedule.nextDueDate),
           active: schedule.active,
+          sendMode: schedule.sendMode ?? 'remind',
         })
       } else {
         setForm(initialFormData)
@@ -132,6 +145,7 @@ export function ScheduleFormDialog({
           form.frequency === 'custom' ? form.customIntervalDays : undefined,
         nextDueDate: form.nextDueDate,
         active: form.active,
+        sendMode: form.sendMode,
       }
 
       if (isEdit && schedule) {
@@ -283,6 +297,34 @@ export function ScheduleFormDialog({
               </PopoverContent>
             </Popover>
           </div>
+
+          {isTauri() && (
+            <div className="space-y-2">
+              <Label htmlFor="schedule-send-mode">When it is due</Label>
+              <Select
+                value={form.sendMode}
+                onValueChange={(value) => updateField('sendMode', value as ScheduleSendMode)}
+              >
+                <SelectTrigger id="schedule-send-mode" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SEND_MODES.map((m) => (
+                    <SelectItem key={m.value} value={m.value} disabled={m.value !== 'remind' && !canSend}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {!canSend
+                  ? 'To have Invoicer send invoices, add your email account in Settings, Email.'
+                  : SEND_MODES.find((m) => m.value === form.sendMode)?.hint}
+                {canSend && form.sendMode !== 'remind' && !settings?.runInBackground &&
+                  ' Invoicer must be open for this, so turn on Run in the background in Settings, Email.'}
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div className="space-y-0.5">
