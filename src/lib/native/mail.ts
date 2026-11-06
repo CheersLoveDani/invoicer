@@ -95,8 +95,33 @@ export const mail = {
   },
 }
 
-/** Start at sign-in and stay in the tray when closed (desktop only). */
+/** Keep a small tray process running when the window is closed (desktop only). */
 export async function setBackgroundMode(enabled: boolean): Promise<void> {
   if (!isTauri()) return
   await invoke('set_background_mode', { enabled })
+}
+
+/** Start Invoicer when the user signs in (desktop only). */
+export async function setStartAtLogin(enabled: boolean): Promise<void> {
+  if (!isTauri()) return
+  await invoke('set_start_at_login', { enabled })
+}
+
+/** Tells the tray process when to next wake the app (ms since 1970). */
+export async function reportNextWake(atMs: number | null): Promise<void> {
+  if (!isTauri()) return
+  await invoke('background_next_wake', { atMs })
+}
+
+/** A background pass finished; a hidden run then closes its window. */
+export async function backgroundPassDone(): Promise<void> {
+  if (!isTauri()) return
+  await invoke('background_pass_done', {})
+}
+
+/** Runs `handler` when the window is closed while background mode is on. */
+export async function onBackgroundClosing(handler: () => void): Promise<() => void> {
+  if (!isTauri()) return () => {}
+  const { getCurrentWindow } = await import('@tauri-apps/api/window')
+  return getCurrentWindow().listen('background-closing', handler)
 }

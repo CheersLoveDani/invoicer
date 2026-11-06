@@ -41,6 +41,8 @@ export interface InvoiceOutbox {
   error?: string
   /** Milliseconds since 1970, so backups restore it without date parsing. */
   lastAttemptAt?: number
+  /** A sample made from Settings to try the flow; deleted once sent or cancelled. */
+  test?: boolean
 }
 
 export type SmtpSecurity = 'tls' | 'starttls'
@@ -157,6 +159,8 @@ export interface AppSettings {
   lastBackupDate?: Date
   backupReminderDays: number
   smtp?: SmtpSettings
-  /** Start at sign-in and stay in the tray, so scheduled emails go out. Desktop only. */
+  /** Closing the window leaves a small tray process that wakes the app when an invoice is due. Desktop only. */
   runInBackground?: boolean
+  /** Start Invoicer when the user signs in (to the tray in background mode). Unset follows runInBackground. Desktop only. */
+  startAtLogin?: boolean
 }

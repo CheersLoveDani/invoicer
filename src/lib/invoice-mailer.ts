@@ -94,6 +94,11 @@ export async function deliverInvoice(invoice: Invoice): Promise<void> {
     attachment: { name: invoicePdfFilename(invoice), data: pdfBlob },
   })
 
+  // A test only tries the flow, so it leaves nothing behind in invoices or totals
+  if (invoice.outbox?.test) {
+    await invoiceService.delete(invoice.id)
+    return
+  }
   await invoiceService.setOutbox(invoice.id, undefined)
   await invoiceService.markSent(invoice.id)
 }

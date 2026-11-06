@@ -36,8 +36,8 @@ function OutboxRow({ invoice, index }: { invoice: Invoice; index: number }) {
   }
 
   async function stop() {
-    await invoiceService.setOutbox(invoice.id, undefined)
-    toast.success(`${label} will not be sent automatically. It stays a draft.`)
+    await invoiceService.cancelOutbox(invoice.id)
+    toast.success(box.test ? 'Test invoice removed' : `${label} will not be sent automatically. It stays a draft.`)
   }
 
   return (

@@ -67,6 +67,13 @@ export const invoiceService = {
     await db.invoices.update(id, { outbox })
   },
 
+  /** Stops an automatic send. A test invoice is removed; a real one stays a draft. */
+  async cancelOutbox(id: string): Promise<void> {
+    const invoice = await db.invoices.get(id)
+    if (invoice?.outbox?.test) await db.invoices.delete(id)
+    else await db.invoices.update(id, { outbox: undefined })
+  },
+
   async markPaid(id: string): Promise<void> {
     const existing = await db.invoices.get(id)
     if (!existing || existing.status === 'paid') return

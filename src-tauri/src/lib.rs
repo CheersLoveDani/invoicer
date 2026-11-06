@@ -24,19 +24,14 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(background::Background::default())
         .on_window_event(|window, event| {
-            use tauri::Manager;
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.app_handle().state::<background::Background>().enabled() {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
+                background::on_close_requested(window, api);
             }
         })
         .setup(|app| {
-            // The window starts hidden so a sign-in launch can stay in the tray
-            if !std::env::args().any(|arg| arg == background::MINIMIZED_ARG) {
-                background::show_main(app.handle());
-            }
+            // The window is created here, not from the config, so a sign-in
+            // launch in background mode never loads the web view
+            background::init(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -45,6 +40,9 @@ pub fn run() {
             mail::smtp_delete_password,
             mail::smtp_send,
             background::set_background_mode,
+            background::set_start_at_login,
+            background::background_next_wake,
+            background::background_pass_done,
         ]);
 
     #[cfg(mobile)]
@@ -55,11 +53,30 @@ pub fn run() {
         mail::smtp_send,
     ]);
 
-    builder
+    let app = builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    app.run(|_app, _event| {
+        #[cfg(desktop)]
+        {
+            use tauri::Manager;
+            match _event {
+                // Closing the last window leaves the tray process running;
+                // Quit Invoicer (an explicit exit code) still quits
+                tauri::RunEvent::ExitRequested { code: None, api, .. }
+                    if _app.state::<background::Background>().enabled() =>
+                {
+                    api.prevent_exit();
+                }
+                #[cfg(target_os = "macos")]
+                tauri::RunEvent::Reopen { .. } => background::show_main(_app),
+                _ => {}
+            }
+        }
+    });
 }

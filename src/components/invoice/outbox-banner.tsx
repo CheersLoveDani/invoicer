@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Loader2, MailCheck, MailWarning, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { invoiceService } from '@/db'
@@ -20,6 +21,7 @@ interface OutboxBannerProps {
 
 /** Shown on an invoice the app is waiting to email: approve it, retry it, or stop it. */
 export function OutboxBanner({ invoiceId, invoiceNumber, recipient, outbox, beforeSend, onSent }: OutboxBannerProps) {
+  const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const to = recipient || 'the client'
 
@@ -28,8 +30,10 @@ export function OutboxBanner({ invoiceId, invoiceNumber, recipient, outbox, befo
     try {
       await beforeSend()
       await sendInvoiceNow(invoiceId)
-      onSent()
       toast.success(`${invoiceNumber || 'Invoice'} sent to ${to}`)
+      // A sent test invoice is deleted, so there is nothing left to show here
+      if (outbox.test) navigate('/scheduled')
+      else onSent()
     } catch (err) {
       toast.error(errorMessage(err))
     } finally {
@@ -38,8 +42,13 @@ export function OutboxBanner({ invoiceId, invoiceNumber, recipient, outbox, befo
   }
 
   async function stop() {
-    await invoiceService.setOutbox(invoiceId, undefined)
-    toast.success('It will not be sent automatically. It stays a draft.')
+    await invoiceService.cancelOutbox(invoiceId)
+    if (outbox.test) {
+      toast.success('Test invoice removed')
+      navigate('/scheduled')
+    } else {
+      toast.success('It will not be sent automatically. It stays a draft.')
+    }
   }
 
   const failed = outbox.state === 'failed'

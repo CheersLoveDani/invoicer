@@ -131,13 +131,10 @@ async function recoverInterrupted(): Promise<void> {
     })
 }
 
-let running = false
+let current: Promise<void> | null = null
 let recovered = false
 
-/** One pass of the outbox. Safe to call often; overlapping calls are skipped. */
-export async function runAutoSend(): Promise<void> {
-  if (running || !isTauri()) return
-  running = true
+async function pass(): Promise<void> {
   try {
     if (!recovered) {
       recovered = true
@@ -147,9 +144,40 @@ export async function runAutoSend(): Promise<void> {
     await sendQueued()
   } catch (err) {
     console.error('The outbox could not run:', err)
-  } finally {
-    running = false
   }
+}
+
+/** One pass of the outbox. Safe to call often: a call during a pass waits for that pass. */
+export function runAutoSend(): Promise<void> {
+  if (!isTauri()) return Promise.resolve()
+  current ??= pass().finally(() => {
+    current = null
+  })
+  return current
+}
+
+/** Daily check, so overdue and reminder notifications still appear while the window is closed. */
+const DAILY_CHECK_HOUR = 9
+
+/**
+ * When the app next has something to do: a schedule coming due, a failed
+ * send to retry, or the daily check. Only future times count; anything due
+ * now is handled by the pass that is running.
+ */
+export async function nextWakeAt(now = Date.now()): Promise<number> {
+  const daily = new Date(now)
+  daily.setHours(DAILY_CHECK_HOUR, 0, 0, 0)
+  if (daily.getTime() <= now) daily.setDate(daily.getDate() + 1)
+  const times = [daily.getTime()]
+
+  for (const s of await db.schedules.toArray()) {
+    if (s.active) times.push(new Date(s.nextDueDate).getTime())
+  }
+  for (const inv of await db.invoices.filter((i) => i.outbox?.state === 'failed').toArray()) {
+    const box = inv.outbox!
+    if (box.attempts < MAX_ATTEMPTS) times.push((box.lastAttemptAt ?? 0) + RETRY_AFTER_MS)
+  }
+  return Math.min(...times.filter((t) => t > now))
 }
 
 /** Queue an invoice to be sent by the outbox from a clean start. */

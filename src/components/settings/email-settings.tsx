@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ExternalLink, Loader2, Save, Send, Trash2 } from 'lucide-react'
-import { db, profileService, settingsService } from '@/db'
+import { CalendarClock, ExternalLink, Loader2, Save, Send, Trash2 } from 'lucide-react'
+import { db, invoiceService, profileService, settingsService } from '@/db'
 import { GMAIL_DEFAULTS, mail, smtpLogin } from '@/lib/native/mail'
 import { errorMessage, renderInvoicePdf, styledEmail } from '@/lib/invoice-mailer'
 import { addDays } from 'date-fns'
@@ -45,28 +46,73 @@ function Section({ title, description, children }: { title: string; description:
   )
 }
 
-function BackgroundToggle() {
-  const enabled = useLiveQuery(async () => (await settingsService.get()).runInBackground ?? false)
+function SettingSwitch({
+  id,
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  id: string
+  label: string
+  description: string
+  checked: boolean | undefined
+  onChange: (next: boolean) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+      <div className="space-y-0.5">
+        <Label htmlFor={id}>{label}</Label>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      <Switch id={id} checked={checked ?? false} onCheckedChange={onChange} disabled={checked === undefined} />
+    </div>
+  )
+}
 
-  async function handleChange(next: boolean) {
+function BackgroundToggles() {
+  const settings = useLiveQuery(async () => {
+    const s = await settingsService.get()
+    const background = s.runInBackground ?? false
+    return { background, startAtLogin: s.startAtLogin ?? background }
+  })
+
+  async function save(patch: { runInBackground?: boolean; startAtLogin?: boolean }, message: string) {
     try {
-      await settingsService.save({ runInBackground: next })
-      toast.success(next ? 'Invoicer will keep running in the tray' : 'Invoicer will quit when closed')
+      // Pin start at sign-in, which otherwise follows background mode
+      await settingsService.save({ startAtLogin: settings?.startAtLogin, ...patch })
+      toast.success(message)
     } catch {
       toast.error('The setting was not saved. Try again.')
     }
   }
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
-      <div className="space-y-0.5">
-        <Label htmlFor="runInBackground">Run in the background</Label>
-        <p className="text-sm text-muted-foreground">
-          Starts Invoicer when you sign in and keeps it in the tray when you close the window, so
-          scheduled invoices go out on time.
-        </p>
-      </div>
-      <Switch id="runInBackground" checked={enabled ?? false} onCheckedChange={handleChange} disabled={enabled === undefined} />
+    <div className="space-y-3">
+      <SettingSwitch
+        id="runInBackground"
+        label="Run in the background"
+        description="Closing the window leaves a small tray icon that uses almost no memory. It opens Invoicer out of sight only when an invoice is due, then closes it again."
+        checked={settings?.background}
+        onChange={(next) =>
+          save(
+            { runInBackground: next },
+            next ? 'Invoicer will stay in the tray when closed' : 'Invoicer will quit when closed',
+          )
+        }
+      />
+      <SettingSwitch
+        id="startAtLogin"
+        label="Open at sign-in"
+        description="Starts Invoicer when you sign in to your computer. With Run in the background on, it starts in the tray."
+        checked={settings?.startAtLogin}
+        onChange={(next) =>
+          save(
+            { startAtLogin: next },
+            next ? 'Invoicer will start when you sign in' : 'Invoicer will not start when you sign in',
+          )
+        }
+      />
     </div>
   )
 }
@@ -79,7 +125,8 @@ export function EmailSettings() {
   const [password, setPassword] = useState('')
   const [testTo, setTestTo] = useState('')
   const [hasPassword, setHasPassword] = useState(false)
-  const [busy, setBusy] = useState<'save' | 'test' | 'remove' | null>(null)
+  const [busy, setBusy] = useState<'save' | 'test' | 'scheduled' | 'remove' | null>(null)
+  const navigate = useNavigate()
 
   // Fill the form once when the saved account loads
   const loaded = useRef(false)
@@ -142,36 +189,62 @@ export function EmailSettings() {
     setBusy(null)
   }
 
+  /** A made-up invoice from your real profile and bank details. */
+  async function buildSample(toEmail: string) {
+    const [profile, settings] = await Promise.all([profileService.get(), settingsService.get()])
+    const sender = form.fromName.trim() || profile.name || ''
+    const today = new Date()
+    const sample = {
+      invoiceNumber: 'TEST0001',
+      title: 'Sample work (this is a test)',
+      status: 'draft' as const,
+      date: today,
+      dueDate: addDays(today, 30),
+      from: { name: sender, email: form.fromEmail.trim(), address: profile.address, phone: profile.phone },
+      to: { name: 'Test client', email: toEmail, address: '', phone: '' },
+      lineItems: [
+        { id: 'sample-1', type: 'fixed' as const, description: 'Website design', price: 950 },
+        { id: 'sample-2', type: 'hourly' as const, description: 'Content updates', rate: 50, hours: 5, price: 250 },
+      ],
+      expenses: [{ id: 'sample-3', type: 'expense' as const, description: 'Stock photos', price: 50 }],
+      notes: 'This is a test invoice from Invoicer. Nothing is owed.',
+      pdfTemplate: settings.defaultPdfTemplate || 'elegant',
+      currency: profile.defaultCurrency || 'GBP',
+      paymentDetails: {
+        bankAccountName: profile.bankAccountName,
+        bankName: profile.bankName,
+        bankSortCode: profile.bankSortCode,
+        bankAccountNumber: profile.bankAccountNumber,
+        reference: 'TEST0001',
+      },
+    }
+    return { sample, sender, profile }
+  }
+
+  /** Puts a sample invoice in the outbox, as a schedule set to ask first would. */
+  async function handleScheduledTest() {
+    setBusy('scheduled')
+    try {
+      if (!(await persist())) return
+      const { sample } = await buildSample(testTo.trim() || form.fromEmail.trim())
+      await invoiceService.create({
+        ...sample,
+        outbox: { state: 'awaiting-approval', attempts: 0, test: true },
+      })
+      toast.success('A test invoice is waiting for your OK')
+      navigate('/scheduled')
+    } catch (err) {
+      toast.error(errorMessage(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function handleTest() {
     setBusy('test')
     try {
       if (!(await persist())) return
-      const [profile, settings] = await Promise.all([profileService.get(), settingsService.get()])
-      const sender = form.fromName.trim() || profile.name || ''
-      const today = new Date()
-      const sample = {
-        invoiceNumber: 'TEST0001',
-        title: 'Sample work (this is a test)',
-        date: today,
-        dueDate: addDays(today, 30),
-        from: { name: sender, email: form.fromEmail.trim(), address: profile.address, phone: profile.phone },
-        to: { name: 'ACME Ltd', email: '', address: '', phone: '' },
-        lineItems: [
-          { id: 'sample-1', type: 'fixed' as const, description: 'Website design', price: 950 },
-          { id: 'sample-2', type: 'hourly' as const, description: 'Content updates', rate: 50, hours: 5, price: 250 },
-        ],
-        expenses: [{ id: 'sample-3', type: 'expense' as const, description: 'Stock photos', price: 50 }],
-        notes: 'This is a test invoice from Invoicer. Nothing is owed.',
-        pdfTemplate: settings.defaultPdfTemplate || 'elegant',
-        currency: profile.defaultCurrency || 'GBP',
-        paymentDetails: {
-          bankAccountName: profile.bankAccountName,
-          bankName: profile.bankName,
-          bankSortCode: profile.bankSortCode,
-          bankAccountNumber: profile.bankAccountNumber,
-          reference: 'TEST0001',
-        },
-      }
+      const { sample, sender, profile } = await buildSample(testTo.trim() || form.fromEmail.trim())
       const body = `This is a test from Invoicer, showing how your invoice emails will look. The amounts are made up, and a sample invoice is attached.
 
 Kind regards,
@@ -325,6 +398,10 @@ ${sender}`
               Remove account
             </Button>
           )}
+          <Button type="button" variant="outline" onClick={handleScheduledTest} disabled={busy !== null}>
+            {busy === 'scheduled' ? <Loader2 className="animate-spin" /> : <CalendarClock />}
+            Test a scheduled invoice
+          </Button>
           <Button type="button" variant="outline" onClick={handleTest} disabled={busy !== null}>
             {busy === 'test' ? <Loader2 className="animate-spin" /> : <Send />}
             Send test email
@@ -340,7 +417,7 @@ ${sender}`
         title="Scheduled sending"
         description="Choose what each schedule does when it is due on the Scheduled page."
       >
-        <BackgroundToggle />
+        <BackgroundToggles />
       </Section>
     </form>
   )
